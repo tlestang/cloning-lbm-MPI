@@ -10,11 +10,40 @@
 
 using namespace std;
 
+//GLOBAL PARAMETERS FOR LBM
+int c[9][2] = {{0,0}, {1,0}, {0,1}, {-1,0}, {0,-1}, {1,1}, {-1,1}, {-1,-1}, {1,-1}};
+double w[9]={4.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0};
+int Dx, Dy, xmin, xmax, ymin, ymax;
+
 int main()
 {
-  
+
+  // --- PARAMETERS FOR TLGK ALGO. ---
+  int Nc = 500; // Number of clones
+  double T =200; // Total simulation time
+  double dt = 0.002; // Model timestep
+  double dT = 0.4; // Cloning timestep
+  double eps = 0.001;
+  //------------------------
+
+  // --- PARAMETERS FOR LBM ---
+  double tau = 1.0, beta = 1.0, Ma = 1.0;
+  int Lx = 0, Ly = 0;
+  //READ INPUT FILE
+  ifstream input_file("input_LBM.datin");
+  input_file >> Lx; Ly = Lx;
+  input_file >> tau;
+  input_file >> Ma;
+  input_file.close();
+  //SPECIFIC PARAMETERS FOR PROGRESSIVE FORCING
+  double tau_c = /*17550;*/ 35100;
+  double tau0 = tau_c + tau_c*(2.0*drand48()-1)/2.0; /*Random time between 0.5*tau_c and 2.5*tau_c*/
+  double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2);
+  //------------------
+
+  //VARIABLES FOR TLGK
   double phi_alpha, phi_theor;
-  double alpha = -0.5, alphaIncr = 0.004;
+  double alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -23,7 +52,20 @@ int main()
   int ctm, cte, nbComm;
   int sender, dest;
   bool flag;
+  //-------------------
 
+  //VARIABLES FOR LBM
+  double *fin, *fout, *temp, *rho, *ux, *uy;
+  Dy = 4*Ly + 1, Dx = 2*(Dy-1) + 1;
+  xmin = (Dx-1)/2; xmax = xmin + Lx;
+  ymin = (Dy-1)/2 - Ly/2; ymax = ymin + Ly;
+  double cs = 1./sqrt(3); double rho0 = 1.0;
+  double u0 = cs*cs*Ma; double uxSum, uxMean;
+  double nu = 1./3.*(tau-0.5);
+  double omega = 1.0/tau;
+  double F;
+  beta = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2);
+  
   MPI_Init(NULL, NULL);
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
   MPI_Comm_size(MPI_COMM_WORLD,&p);
@@ -92,9 +134,9 @@ int main()
 	 {
 	   for(int t=0;t<transientLength;t++)
 	     {
-	       streamingAndCollisionComputeMacroBodyForce(x[j], fout, rho, u, Dx, Dy, tau, beta);
-	       computeDomainNoSlipWalls_BB(fout, x[j], Dx, Dy);
-	       computeSquareBounceBack_TEST(fout, x[j], xmin, xmax, ymin, ymax);
+	       streamingAndCollisionComputeMacroBodyForce(x[j], fout, rho, ux, uy, beta, tau);
+	       computeDomainNoSlipWalls_BB(fout, x[j]);
+	       computeSquareBounceBack_TEST(fout, x[j]);
 
 	       // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	       for(int x=xmin+1;x<xmax;x++)
@@ -103,7 +145,7 @@ int main()
 		     {
 		       for(int k=0;k<9;k++)
 			 {
-			   popHeapOut[x][y][k] = w[k];
+			   fout[IDX(x,y,k)] = w[k];
 			 }
 		     }
 		 }
@@ -118,9 +160,9 @@ int main()
 	 {
 	   for(int t=0;t<lbmTimesteps;t++)
 	     {
-	       streamingAndCollisionComputeMacroBodyForce(x[j], fout, rho, u, Dx, Dy, tau, beta);
-	       computeDomainNoSlipWalls_BB(fout, x[j], Dx, Dy);
-	       computeSquareBounceBack_TEST(fout, x[j], xmin, xmax, ymin, ymax);
+	       streamingAndCollisionComputeMacroBodyForce(x[j], fout, rho, ux, uy, beta, tau);
+	       computeDomainNoSlipWalls_BB(fout, x[j]);
+	       computeSquareBounceBack_TEST(fout, x[j]);
 
 	       // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	       for(int x=xmin+1;x<xmax;x++)
@@ -129,7 +171,7 @@ int main()
 		     {
 		       for(int k=0;k<9;k++)
 			 {
-			   popHeapOut[x][y][k] = w[k];
+			   fout[IDX(x,y,k)] = w[k];
 			 }
 		     }
 		 }
@@ -138,7 +180,7 @@ int main()
 	       x[j] = fout;
 	       fout = temp;
 	       // COMPUTE FORCE ON SQUARE
-	       F = computeForceOnSquare(x[j], xmax, xmin, ymax, ymin, omega);
+	       F = computeForceOnSquare(x[j], omega);
 	       // COMPUTE WEIGHT
 	       s_ += F;
 	     }
@@ -298,6 +340,8 @@ int main()
 		  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
 		  MPI_Barrier(MPI_COMM_WORLD);
 	      	}
+     } // ALPHA
+} // MAIN()
 	  
 
      
