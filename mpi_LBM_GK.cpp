@@ -31,13 +31,11 @@ int Dx, Dy, xmin, xmax, ymin, ymax;
 
 int main()
 {
-
+  
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 10; // Number of clones
-  double T =00; // Total simulation time
-  double dt = 0.002; // Model timestep
+  int Nc = 4; // Number of clones
+  double T = 10; // Total simulation time
   double dT = 2.5; // Cloning timestep
-  double eps = 0.001;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
@@ -51,12 +49,13 @@ int main()
   input_file >> t0; //t0 IS THE TURN AROUND TIME (GIVEN IN LBM TIMESTEP)
   input_file.close();
   //SPECIFIC PARAMETERS FOR PROGRESSIVE FORCING
-  double tau0 = t0 + t0*(2.0*drand48()-1)/2.0; /*Random time between 0.5*t0 and 2.5*t0*/
+  double tau0;
+  
   //------------------
 
   //VARIABLES FOR TLGK
   double phi_alpha, phi_theor;
-  double alpha, alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
+  double alpha=0.04, alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -75,19 +74,17 @@ int main()
   double cs = 1./sqrt(3); double rho0 = 1.0;
   double nu = 1./3.*(tau-0.5);
   double u0 = cs*cs*Ma; double uxSum, uxMean;
-  double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2);
+  double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2); double a=1.0;
   double omega = 1.0/tau;
   double F;
   double delta_t = 1.0/t0; 
   int lbmTimesteps = floor(dT/delta_t);
   int transientLength = 10*tau0; //tau0 IS THE CHARACTERISTIC TIME OF THE FORCING
   
-  
   MPI_Init(NULL, NULL);
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
   MPI_Comm_size(MPI_COMM_WORLD,&p);
   local_Nc = Nc/p;
-
   double **state;
   state = new double*[local_Nc];
   for(int j=0;j<local_Nc;j++)
@@ -107,7 +104,7 @@ int main()
   double R_record[nbrTimeSteps]; double R, total_R;
 
   string path_to_control_run;
-  path_to_control_run = "/home/thibault/lbm_control_data/L64_control_2/pops.datout";
+  path_to_control_run = "/home/thibault/lbm_code/source_code/L32_FOR_TRANSIENT/pops.datout";
   ifstream crHandle;
 
   MPI_Status status;
@@ -119,9 +116,9 @@ int main()
   if(my_rank==MASTER){result.open("phi_alpha_mpi_V2.datout");}
   
   //START LOOP ON VALUES OF ALPHA
-  while(alpha<alphaMax)
-    {
-      alpha += alphaIncr;
+  //while(alpha<alphaMax)
+  //{
+  //alpha += alphaIncr;
       //INITIALIZE CLONES TO STATE POPS.DATOUT FROM path_to_control_run
       crHandle.open(path_to_control_run.c_str());
       for(int j=0;j<local_Nc;j++)
@@ -130,12 +127,12 @@ int main()
 	  for(int x=0;x<Dx;x++)
 	    {
 	      for(int y=0;y<Dy;y++)
-		{
-		  for(int k=0;k<9;k++)
-		    {
-		      crHandle >> state[j][IDX(x,y,k)];
+	  	{
+	  	  for(int k=0;k<9;k++)
+	  	    {
+	  	      crHandle >> state[j][IDX(x,y,k)];
 		    }
-		}
+	  	}
 	    }
 	}
       crHandle.close();
@@ -143,14 +140,25 @@ int main()
       //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
       for(int t=0;t<nbrTimeSteps;t++)
 	{
+	  // if(my_rank==MASTER)
+	  //   {
+	  //     cout << "Going for " << lbmTimesteps << "lbm timesteps" << endl;
+	  // cout << " " << endl;
+	  // cout << "Timestep nb " << t <<"/"<<nbrTimeSteps<<endl;
+	  // cout << " " << endl;
+	  //   }
 	  R = 0.0;  
-       
+          
 	  //LATTICE BOLTZMANN DYNAMICS
 	  //W8 FOR DYNAMICS TO RELAX DUE TO PROGRESSIVE FORCING
 	  for(int j=0;j<local_Nc;j++) // Loop on clones
 	    {
+	      tau0 = t0 + t0*(2.0*drand48()-1)/2.0; /*Random time between 0.5*t0 and 2.5*t0*/
+	      transientLength = floor(10*tau0);
 	      for(int t=0;t<transientLength;t++)
 		{
+		  a = -t/tau0;
+		  beta = beta0*(1.0-exp(a));
 		  streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta, tau);
 		  computeDomainNoSlipWalls_BB(fout, state[j]);
 		  computeSquareBounceBack_TEST(fout, state[j]);
@@ -175,6 +183,7 @@ int main()
 	  //SIMULATE THE SYSTEM THROUGH STATIONARY DYNAMICS DURING dT AND COMPUTE WEIGHT
 	  for(int j=0;j<local_Nc;j++) // Loop on clones
 	    {
+	      s_ = 0;
 	      for(int t=0;t<lbmTimesteps;t++)
 		{
 		  streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta, tau);
@@ -198,12 +207,15 @@ int main()
 		  fout = pivot;
 		  // COMPUTE FORCE ON SQUARE
 		  F = computeForceOnSquare(state[j], omega);
+		  //if(my_rank==MASTER){cout << "F = " << F << endl;}
 		  // COMPUTE WEIGHT
 		  s_ += F;
 		}
+	      
 	      s_ *= delta_t;
 	      //STORE WEIGHT IN WEIGHTS ARRAY s[local_Nc]
 	      s[j] = exp(alpha*s_);
+	      //if(my_rank==1){cout << "clone " << j << " : s = " << s_ << endl;}
 	      //UPDATE LOCAL AVERAGE WEIGHT
 	      R += s[j];
 	    }
@@ -234,6 +246,7 @@ int main()
 	  //MASTER POST-PROCESSES EVOLUTION OF COPIES AND DO THE CLONING
 	  if(my_rank==MASTER)
 	    {
+	      cout << "MASTER STARTS PREPROCESSING EVOLUTION" << endl;
 	      total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
 
 	      NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
@@ -255,7 +268,7 @@ int main()
 		      k++;
 		    }
 		}
-
+	      cout << "CLONING/PRUNING WITH Ncprime = " << NcPrime << endl;
 	      // CLONNG/PRUNING PHASE
 	      if(deltaN > 0) // IF NcPrime > Nc KILL deltaN CLONES
 		{
@@ -285,6 +298,12 @@ int main()
 		      nbCreatedCopies[cloneIdx]++;
 		    }
 		}
+
+	      //----------------------------------
+	      // for(int j=0;j<Nc;j++)
+	      // 	{
+	      // 	  cout << "Clone " << j << " created " << nbCreatedCopies[j] << endl;
+	      // 	}
 	      
 	      // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
 	      nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
@@ -358,7 +377,8 @@ int main()
 	      MPI_Barrier(MPI_COMM_WORLD);
 	    }
 	} //TIMESTEPS
-    } // ALPHA
+      //} // ALPHA
+      MPI_Finalize();
 } // MAIN()
 	  
 
