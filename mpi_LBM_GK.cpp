@@ -33,25 +33,25 @@ int main()
 {
 
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 500; // Number of clones
-  double T =200; // Total simulation time
+  int Nc = 10; // Number of clones
+  double T =00; // Total simulation time
   double dt = 0.002; // Model timestep
-  double dT = 0.4; // Cloning timestep
+  double dT = 2.5; // Cloning timestep
   double eps = 0.001;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
-  double tau = 1.0, beta = 1.0, Ma = 1.0;
+  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0;
   int Lx = 0, Ly = 0;
   //READ INPUT FILE
   ifstream input_file("input_LBM.datin");
   input_file >> Lx; Ly = Lx;
   input_file >> tau;
   input_file >> Ma;
+  input_file >> t0; //t0 IS THE TURN AROUND TIME (GIVEN IN LBM TIMESTEP)
   input_file.close();
   //SPECIFIC PARAMETERS FOR PROGRESSIVE FORCING
-  double tau_c = /*17550;*/ 35100;
-  double tau0 = tau_c + tau_c*(2.0*drand48()-1)/2.0; /*Random time between 0.5*tau_c and 2.5*tau_c*/
+  double tau0 = t0 + t0*(2.0*drand48()-1)/2.0; /*Random time between 0.5*t0 and 2.5*t0*/
   //------------------
 
   //VARIABLES FOR TLGK
@@ -78,7 +78,7 @@ int main()
   double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2);
   double omega = 1.0/tau;
   double F;
-  double delta_t = 0.1; //TO CORRECT
+  double delta_t = 1.0/t0; 
   int lbmTimesteps = floor(dT/delta_t);
   int transientLength = 10*tau0; //tau0 IS THE CHARACTERISTIC TIME OF THE FORCING
   
