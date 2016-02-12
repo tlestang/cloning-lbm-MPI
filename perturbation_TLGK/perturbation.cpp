@@ -17,6 +17,7 @@ int perturbPopulationField(int n, double *f)
   dv = new double[n*n];
   
   generate_random_field(n, psi, error);
+  apply_mask_TLGK(n, psi, 4.0);
   take_curl(n,psi,du,dv,error);
 
   for(int x=0;x<n;x++)
