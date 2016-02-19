@@ -21,7 +21,6 @@
 #include "src/write_vtk.h"
 
 #include "perturbation_TLGK/perturbation.h"
-#include "perturbation_TLGK/generate_mask.h"
 
 #define MASTER 0
 
@@ -37,8 +36,9 @@ int main()
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 4; // Number of clones
-  double T = 10; // Total simulation time
-  double dT = 1; // Cloning timestep
+  double T = 100; // Total simulation time
+  double dT = 20; // Cloning timestep
+  double dT0 = 1.0/10.0;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
@@ -70,7 +70,7 @@ int main()
   //-------------------
 
   //VARIABLES FOR LBM
-  double *fin, *fout, *pivot, *rho, *ux, *uy;
+  double *fin, *fout, *pivot, *rho, *ux, *uy, *map;
   Dy = 4*Ly + 1, Dx = Dy;
   xmin = (Dx-1)/2; xmax = xmin + Lx;
   ymin = (Dy-1)/2 - Ly/2; ymax = ymin + Ly;
@@ -80,8 +80,10 @@ int main()
   double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2); double a=1.0;
   double omega = 1.0/tau;
   double F;
-  double delta_t = 1.0/t0; 
-  int lbmTimesteps = floor(dT/delta_t);
+  double delta_t = 1.0/t0;
+  int error;
+  int lbmTimeSteps1 = floor(dT0/delta_t);
+  int lbmTimeSteps2 = floor((dT-dT0)/delta_t);
    
   MPI_Init(NULL, NULL);
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
@@ -99,10 +101,8 @@ int main()
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   uy = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
+  map = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
 
-  //MASK TO APPLY FOR IMPOSING BC WHEN GENERATING RANDOM STREAM FUNCTION
-  double* mask;
-  mask = new double[Dx*Dy];
 
   int temp[2*Nc]; 
   int comm_instru_Send[local_Nc]; int comm_instru_Recv[local_Nc];
@@ -126,9 +126,6 @@ int main()
   //while(alpha<alphaMax)
   //{
   //alpha += alphaIncr;
-      //INITIALIZE CLONES TO STATE POPS.DATOUT FROM path_to_control_run
-  //GENERATE MASK
-  generate_mask(Dx, mask, 4.0);
   
   if(my_rank==MASTER)
     {
@@ -173,20 +170,12 @@ int main()
 	  if(my_rank==MASTER){cout << "Clone " << j << " | dT = " << t << endl;}
 	  s_ = 0;
 	  
-	  
-	  for(int t=0;t<lbmTimesteps;t++)
+	  generate_random_field(Dx, map, error);	  
+	  for(int t=0;t<lbmTimeSteps1;t++)
 	    {
-
-	      // if(t%1==0)
-	      // 	{
-
-		  //}
-	      
-	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);
-	      //write_fluid_vtk(t,Dx,Dy, rho, ux, uy, folderName.str().c_str());
+	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
 	      computeDomainNoSlipWalls_BB(fout, state[j]);
 	      computeSquareBounceBack_TEST(fout, state[j]);
-
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -206,10 +195,38 @@ int main()
 	      F = computeForceOnSquare(state[j], omega);
 	      //if(my_rank==MASTER){cout << "F = " << F << endl;}
 	      // COMPUTE WEIGHT
-	      s_ += F;
-	      
-	      
+	      s_ += F*100;
 	    } //END LOOP ON TIMESTEPS
+
+
+	  for(int t=0;t<lbmTimeSteps2;t++)
+	    {
+	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);
+	      computeDomainNoSlipWalls_BB(fout, state[j]);
+	      computeSquareBounceBack_TEST(fout, state[j]);
+	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
+	      for(int x=xmin+1;x<xmax;x++)
+		{
+		  for(int y=ymin+1;y<ymax;y++)
+		    {
+		      for(int k=0;k<9;k++)
+			{
+			  fout[IDX(x,y,k)] = w[k];
+			}
+		    }
+		}
+	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
+	      pivot = state[j];
+	      state[j] = fout;
+	      fout = pivot;
+	      // COMPUTE FORCE ON SQUARE
+	      F = computeForceOnSquare(state[j], omega);
+	      //if(my_rank==MASTER){cout << "F = " << F << endl;}
+	      // COMPUTE WEIGHT
+	      s_ += F*100;
+	    } //END LOOP ON TIMESTEPS
+
+	  
 	  //if(my_rank==MASTER){cout << "Clone " << j << " | s_ = " << s_ << endl;}
 	  s_ *= delta_t;
 	  //STORE WEIGHT IN WEIGHTS ARRAY s[local_Nc]
@@ -382,12 +399,6 @@ int main()
 	  MPI_Barrier(MPI_COMM_WORLD);
 	}
 
-      // EACH PROCESS PERTURBS ITS CLONES
-      for(int j=0;j<local_Nc;j++)
-	{
-	  perturbedForcing(Dx, state[j], beta, tau);
-	}
-      
     } //TIMESTEPS
       //} // ALPHA
   MPI_Finalize();

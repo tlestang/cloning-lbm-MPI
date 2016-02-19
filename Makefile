@@ -1,12 +1,18 @@
 CXXFLAGS=-O3 
 LPFLAGS=-lfftw3 -lm
-all: main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o perturbation.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o
-	mpic++ -o TLGK_LBM main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o perturbation.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o $(LPFLAGS)
+
+all: main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o perturbedForcing.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o
+	mpic++ -o TLGK_LBM main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o perturbation.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o $(LPFLAGS)
+
+forcing: main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o
+	mpic++ -o TLGK_LBM_FORCING main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o $(LPFLAGS)
 
 # --- MAIN FUNCTIONS --- #
 
 main.o: mpi_LBM_GK.cpp
 	mpic++ -o main.o -c mpi_LBM_GK.cpp $(CXXFLAGS)
+main_forcing.o: mpi_LBM_GK_forcing.cpp
+	mpic++ -o main_forcing.o -c mpi_LBM_GK_forcing.cpp $(CXXFLAGS)
 
 # --- LBM FUNCTIONS --- #
 
@@ -30,6 +36,8 @@ write_vtk_mean.o: src/write_vtk_mean.cpp
 # --- PERTURBATION OF INITIAL CONDITION --- #
 perturbation.o: perturbation_TLGK/perturbation.cpp
 	g++ -o perturbation.o -c perturbation_TLGK/perturbation.cpp
+perturbedForcing.o: perturbation_TLGK/perturbation_forcing.cpp
+	g++ -o perturbedForcing.o -c perturbation_TLGK/perturbation_forcing.cpp
 generate_random_field.o: perturbation_TLGK/circulant_embedding/generate_random_field.cpp
 	g++ -o generate_random_field.o -c perturbation_TLGK/circulant_embedding/generate_random_field.cpp 
 covariance_fctn.o: perturbation_TLGK/circulant_embedding/covariance_fctn.cpp
@@ -38,6 +46,8 @@ take_curl.o: perturbation_TLGK/circulant_embedding/take_curl.cpp
 	g++ -o take_curl.o -c perturbation_TLGK/circulant_embedding/take_curl.cpp
 randNormal.o: perturbation_TLGK/circulant_embedding/randNormal.cpp
 	g++ -o randNormal.o -c perturbation_TLGK/circulant_embedding/randNormal.cpp
+generate_mask.o: perturbation_TLGK/generate_mask.cpp
+	g++ -o generate_mask.o -c perturbation_TLGK/generate_mask.cpp
 
 # --- CLEANING --- #
 clean:

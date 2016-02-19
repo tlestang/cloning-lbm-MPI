@@ -5,7 +5,7 @@
 
 #include "perturbation.h"
 
-int perturbPopulationField(int n, double *f)
+int perturbPopulationField(int n, double *f, double *mask)
 {
   double *psi, *du, *dv;
   double u,v,rho;
@@ -17,7 +17,14 @@ int perturbPopulationField(int n, double *f)
   dv = new double[n*n];
   
   generate_random_field(n, psi, error);
-  apply_mask_TLGK(n, psi, 4.0);
+  //APPLY MASK TO RANDOM STREAM FUNCTION
+  for(int x=0;x<n;x++)
+    {
+      for(int y=0;y<n;y++)
+	{
+	  psi[idx(x,y)] *= mask[idx(x,y)];
+	}
+    }
   take_curl(n,psi,du,dv,error);
 
   for(int x=0;x<n;x++)
