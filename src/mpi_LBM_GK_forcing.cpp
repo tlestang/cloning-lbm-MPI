@@ -119,6 +119,7 @@ int main()
   string folderName[local_Nc], fileName, instru;
   string masterFolderName = "output/";
   ofstream output_file, weightsFile;
+  instru = "mkdir " + masterFolderName;
   for(int i=0;i<local_Nc;i++)
     {
       stringstream buf;
