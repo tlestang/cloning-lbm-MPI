@@ -120,6 +120,8 @@ int main()
   string masterFolderName = "output/";
   ofstream output_file, weightsFile;
   instru = "mkdir " + masterFolderName;
+  if(my_rank==MASTER){system(instru.c_str());}
+  MPI_Barrier(MPI_COMM_WORLD);
   for(int i=0;i<local_Nc;i++)
     {
       stringstream buf;
