@@ -126,8 +126,8 @@ int main()
     {
       stringstream buf;
       buf << "clone_" << i + my_rank*local_Nc;
-      folderName[i] = buf.str();
-      instru = "mkdir " + masterFolderName + folderName[i];
+      folderName[i] = masterFolderName + buf.str();
+      instru = "mkdir " + folderName[i];
       system(instru.c_str());
     }
    
@@ -170,7 +170,7 @@ int main()
 	  s_ = 0;
 
 	  stringstream buf;
-	  buf << "/evolution_" << t << "_" << "clone_" << j;
+	  buf << "/evolution_" << t << "_" << "clone_" << j+my_rank*local_Nc;
 	  fileName = folderName[j] + buf.str();
 	  output_file.open(fileName.c_str(), ios::binary);
 	  
