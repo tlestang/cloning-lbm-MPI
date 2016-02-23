@@ -36,7 +36,7 @@ int main()
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 4; // Number of clones
-  double T = 16; // Total simulation time
+  double T = 8; // Total simulation time
   double dT = 2; // Cloning timestep
   double dT0 = 2.0/10.0;
   //------------------------
@@ -56,7 +56,7 @@ int main()
 
   //VARIABLES FOR TLGK
   double phi_alpha, phi_theor;
-  double alpha=0.04, alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
+  double alpha=0.4, alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -110,20 +110,21 @@ int main()
   double R_record[nbrTimeSteps]; double R, total_R;
 
   string path_to_control_run;
-  path_to_control_run = "/home/thibault/lbm_code/source_code/L32_FOR_TRANSIENT_SQUARE_BINARY_POPS/pops.datout";
+  path_to_control_run = "/home/thibault/tailleur_lecomte/lbm/L32_square_domain_pops.dat";
   ifstream crFileID;
 
   MPI_Status status;
 
   //Set up variables and containers for output
   string folderName[local_Nc], fileName, instru;
+  string masterFolderName = "output/"
   ofstream output_file, weightsFile;
   for(int i=0;i<local_Nc;i++)
     {
       stringstream buf;
       buf << "clone_" << i + my_rank*local_Nc;
       folderName[i] = buf.str();
-      instru = "mkdir " + folderName[i];
+      instru = "mkdir " + masterFolderName + folderName[i];
       system(instru.c_str());
     }
    
@@ -154,7 +155,8 @@ int main()
 	{
 	  stringstream weightsFileName;
 	  weightsFileName << "weights_evolution_" << t;
-	  weightsFile.open(weightsFileName.str().c_str(), ios::binary);
+	  instru = masterFolderName + weightsFileName.str();
+	  weightsFile.open(instru.c_str(), ios::binary);
 	}
       
       
