@@ -117,7 +117,7 @@ int main()
 
   //Set up variables and containers for output
   string folderName[local_Nc], fileName, instru;
-  string masterFolderName = "output/"
+  string masterFolderName = "output/";
   ofstream output_file, weightsFile;
   for(int i=0;i<local_Nc;i++)
     {
