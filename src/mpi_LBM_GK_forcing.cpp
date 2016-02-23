@@ -11,16 +11,16 @@
 
 #ifndef __global__
 #define __global__
-#include "src/global.h"
+#include "lbm_src/global.h"
 #endif
 
-#include "src/initialize_lattice_arrays.h"
-#include "src/streamCollCompute.h"
-#include "src/boundaryConditions.h"
-#include "src/force.h"
-#include "src/write_vtk.h"
+#include "lbm_src/initialize_lattice_arrays.h"
+#include "lbm_src/streamCollCompute.h"
+#include "lbm_src/boundaryConditions.h"
+#include "lbm_src/force.h"
+#include "lbm_src/write_vtk.h"
 
-#include "perturbation_TLGK/perturbation.h"
+#include "perturbation.h"
 
 #define MASTER 0
 
@@ -36,9 +36,9 @@ int main()
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 4; // Number of clones
-  double T = 100; // Total simulation time
-  double dT = 20; // Cloning timestep
-  double dT0 = 1.0/10.0;
+  double T = 16; // Total simulation time
+  double dT = 2; // Cloning timestep
+  double dT0 = 2.0/10.0;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
@@ -51,9 +51,7 @@ int main()
   input_file >> Ma;
   input_file >> t0; //t0 IS THE TURN AROUND TIME (GIVEN IN LBM TIMESTEP)
   input_file.close();
-  //SPECIFIC PARAMETERS FOR PROGRESSIVE FORCING
-  double tau0;
-  
+
   //------------------
 
   //VARIABLES FOR TLGK
@@ -89,10 +87,11 @@ int main()
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
   MPI_Comm_size(MPI_COMM_WORLD,&p);
   local_Nc = Nc/p;
+  cloneIdxMin = my_rank*local_Nc;
+  
   double **state;
   state = new double*[local_Nc];
-  //state = (double **) memalign(getpagesize(), local_Nc*sizeof(double*));
-  for(int j=0;j<local_Nc;j++)
+    for(int j=0;j<local_Nc;j++)
     {
       // ONE POP ARRAY PER CLONE
       state[j] = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double)); 
@@ -116,17 +115,18 @@ int main()
 
   MPI_Status status;
 
-  ofstream result;
-
-  cloneIdxMin = my_rank*local_Nc;
-  //OPEN FILE FOR WRITING SCGF ON DISK
-  if(my_rank==MASTER){result.open("phi_alpha_mpi_V2.datout");}
-  
-  //START LOOP ON VALUES OF ALPHA
-  //while(alpha<alphaMax)
-  //{
-  //alpha += alphaIncr;
-  
+  //Set up variables and containers for output
+  string folderName[local_Nc], fileName, instru;
+  ofstream output_file, weightsFile;
+  for(int i=0;i<local_Nc;i++)
+    {
+      stringstream buf;
+      buf << "clone_" << i + my_rank*local_Nc;
+      folderName[i] = buf.str();
+      instru = "mkdir " + folderName[i];
+      system(instru.c_str());
+    }
+   
   if(my_rank==MASTER)
     {
       crFileID.open(path_to_control_run.c_str(), ios::binary);
@@ -136,39 +136,38 @@ int main()
 	  crFileID.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
 	}
       crFileID.close();
-      cout << "DONE with init" << endl;
     }
-  
+
   //BROADCAST OF INITIAL POPULATIONS FROM MASTER TO OTHER PROCESSES
   for(int j=0;j<local_Nc;j++)
     {
       MPI_Bcast(&state[j][0], Dx*Dy*9, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
     }
-  
-  //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
+
+   //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
     {
-      // if(my_rank==MASTER)
-      //   {
-      //     cout << "Going for " << lbmTimesteps << "lbm timesteps" << endl;
-      // cout << " " << endl;
-      // cout << "Timestep nb " << t <<"/"<<nbrTimeSteps<<endl;
-      // cout << " " << endl;
-      //   }
-      R = 0.0;  
-          
+
+      R = 0.0;
+
+      if(my_rank==MASTER)
+	{
+	  stringstream weightsFileName;
+	  weightsFileName << "weights_evolution_" << t;
+	  weightsFile.open(weightsFileName.str().c_str(), ios::binary);
+	}
+      
+      
       //SIMULATE THE SYSTEM DURING dT AND COMPUTE WEIGHT
       for(int j=0;j<local_Nc;j++) // Loop on clones
 	{
-	  // stringstream folderName;
-	  // folderName << "CLONE_" << j + p*my_rank;
-	  // string instru = "mkdir " + folderName.str();
-	  // system(instru.c_str());
-	  // instru = "mkdir " + folderName.str() + "/vtk_fluid/";
-	  // system(instru.c_str());
 	  
-	  if(my_rank==MASTER){cout << "Clone " << j << " | dT = " << t << endl;}
 	  s_ = 0;
+
+	  stringstream buf;
+	  buf << "/evolution_" << t << "_" << "clone_" << j;
+	  fileName = folderName[j] + buf.str();
+	  output_file.open(fileName.c_str(), ios::binary);
 	  
 	  generate_random_field(Dx, map, error);	  
 	  for(int t=0;t<lbmTimeSteps1;t++)
@@ -193,11 +192,10 @@ int main()
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
-	      //if(my_rank==MASTER){cout << "F = " << F << endl;}
+	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F*100;
+	      s_ += F;
 	    } //END LOOP ON TIMESTEPS
-
 
 	  for(int t=0;t<lbmTimeSteps2;t++)
 	    {
@@ -221,19 +219,23 @@ int main()
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
-	      //if(my_rank==MASTER){cout << "F = " << F << endl;}
+	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F*100;
+	      s_ += F;
 	    } //END LOOP ON TIMESTEPS
 
+	  output_file.close();
 	  
-	  //if(my_rank==MASTER){cout << "Clone " << j << " | s_ = " << s_ << endl;}
 	  s_ *= delta_t;
 	  //STORE WEIGHT IN WEIGHTS ARRAY s[local_Nc]
 	  s[j] = exp(alpha*s_);
 	  //UPDATE LOCAL AVERAGE WEIGHT
 	  R += s[j];
 	}
+
+
+      // ---------------------------------------------------------------------------------------------
+      // ---------------------------------------------------------------------------------------------
 
       //NOW TIME EVOLUTION OF COPIES IS DONE AND WE MUST :
       // -- DETERMINE HOW MANY CLONES ARE GENERATED BY EACH COPY
@@ -266,7 +268,10 @@ int main()
       //MASTER POST-PROCESSES EVOLUTION OF COPIES AND DO THE CLONING
       if(my_rank==MASTER)
 	{
-	  cout << "MASTER STARTS PREPROCESSING EVOLUTION" << endl;
+	  //WRITE WEIGHTS ON DISK
+	  weightsFile.write((char*)&s[0], Nc*sizeof(double));
+	  weightsFile.close();
+
 	  total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
 
 	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
@@ -290,8 +295,12 @@ int main()
 		  k++;
 		}
 	    }
-	  cout << "CLONING/PRUNING WITH Ncprime = " << NcPrime << endl;
-	  // CLONNG/PRUNING PHASE
+
+	  //  -------------------------------------------------------------------------------------------
+	  //  -------------------------------------------------------------------------------------------
+
+	  
+	  // CLONING/PRUNING PHASE
 	  if(deltaN > 0) // IF NcPrime > Nc KILL deltaN CLONES
 	    {
 	      for(int i=0;i<deltaN;i++)
@@ -321,12 +330,6 @@ int main()
 		}
 	    }
 
-	  //----------------------------------
-	  for(int j=0;j<Nc;j++)
-	  	{
-	  	  cout << "Clone " << j << " created " << nbCreatedCopies[j] << endl;
-	  	}
-	      
 	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
 	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
 	  //LOOP ON ALL Nc CLONES
@@ -400,7 +403,7 @@ int main()
 	}
 
     } //TIMESTEPS
-      //} // ALPHA
+
   MPI_Finalize();
 } // MAIN()
 	  

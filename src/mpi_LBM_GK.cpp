@@ -11,17 +11,17 @@
 
 #ifndef __global__
 #define __global__
-#include "src/global.h"
+#include "lbm_src/global.h"
 #endif
 
-#include "src/initialize_lattice_arrays.h"
-#include "src/streamCollCompute.h"
-#include "src/boundaryConditions.h"
-#include "src/force.h"
-#include "src/write_vtk.h"
+#include "lbm_src/initialize_lattice_arrays.h"
+#include "lbm_src/streamCollCompute.h"
+#include "lbm_src/boundaryConditions.h"
+#include "lbm_src/force.h"
+#include "lbm_src/write_vtk.h"
 
-#include "perturbation_TLGK/perturbation.h"
-#include "perturbation_TLGK/generate_mask.h"
+#include "perturbation.h"
+#include "perturbation_routines/generate_mask.h"
 
 #define MASTER 0
 
@@ -36,8 +36,8 @@ int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 4; // Number of clones
-  double T = 10; // Total simulation time
+  int Nc = 2; // Number of clones
+  double T = 1; // Total simulation time
   double dT = 1; // Cloning timestep
   //------------------------
 
@@ -163,25 +163,11 @@ int main()
       //SIMULATE THE SYSTEM DURING dT AND COMPUTE WEIGHT
       for(int j=0;j<local_Nc;j++) // Loop on clones
 	{
-	  // stringstream folderName;
-	  // folderName << "CLONE_" << j + p*my_rank;
-	  // string instru = "mkdir " + folderName.str();
-	  // system(instru.c_str());
-	  // instru = "mkdir " + folderName.str() + "/vtk_fluid/";
-	  // system(instru.c_str());
-	  
 	  if(my_rank==MASTER){cout << "Clone " << j << " | dT = " << t << endl;}
 	  s_ = 0;
 	  
-	  
 	  for(int t=0;t<lbmTimesteps;t++)
 	    {
-
-	      // if(t%1==0)
-	      // 	{
-
-		  //}
-	      
 	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);
 	      //write_fluid_vtk(t,Dx,Dy, rho, ux, uy, folderName.str().c_str());
 	      computeDomainNoSlipWalls_BB(fout, state[j]);
@@ -204,7 +190,8 @@ int main()
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
-	      //if(my_rank==MASTER){cout << "F = " << F << endl;}
+	      //result_force.write((char*)&F, sizeof(double));
+	      if(my_rank==MASTER){if(t%1000==0){cout << "F = " << F << endl;}}
 	      // COMPUTE WEIGHT
 	      s_ += F;
 	      
@@ -216,6 +203,7 @@ int main()
 	  s[j] = exp(alpha*s_);
 	  //UPDATE LOCAL AVERAGE WEIGHT
 	  R += s[j];
+	  //result_force.close();
 	}
 
       //NOW TIME EVOLUTION OF COPIES IS DONE AND WE MUST :
@@ -383,10 +371,10 @@ int main()
 	}
 
       // EACH PROCESS PERTURBS ITS CLONES
-      for(int j=0;j<local_Nc;j++)
-	{
-	  perturbedForcing(Dx, state[j], beta, tau);
-	}
+      // for(int j=0;j<local_Nc;j++)
+      // 	{
+      // 	  perturbedForcing(Dx, state[j], beta, tau);
+      // 	}
       
     } //TIMESTEPS
       //} // ALPHA
