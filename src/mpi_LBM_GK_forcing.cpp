@@ -36,7 +36,7 @@ int main()
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 4; // Number of clones
-  double T = 8; // Total simulation time
+  double T = 2; // Total simulation time
   double dT = 2; // Cloning timestep
   double dT0 = 2.0/10.0;
   //------------------------
@@ -88,6 +88,10 @@ int main()
   MPI_Comm_size(MPI_COMM_WORLD,&p);
   local_Nc = Nc/p;
   cloneIdxMin = my_rank*local_Nc;
+  //INIT SEED TO RANK SO THAT EACH PORC HAS ITS OWN RANDOM SEQUENCE
+  srand(my_rank+1);
+  //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
+  for(int i=0;i<1000;i++){rand();}
   
   double **state;
   state = new double*[local_Nc];
