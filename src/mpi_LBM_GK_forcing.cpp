@@ -23,6 +23,7 @@
 #include "perturbation.h"
 
 #define MASTER 0
+#define MAX_CHARS 50
 
 using namespace std;
 
@@ -120,7 +121,7 @@ int main()
   MPI_Status status;
 
   //Set up variables and containers for output
-  string folderName[local_Nc], fileName, instru;
+  string folderName[local_Nc], instru;
   string masterFolderName = "output/";
   ofstream output_file, weightsFile;
   instru = "mkdir " + masterFolderName;
@@ -134,23 +135,67 @@ int main()
       instru = "mkdir " + folderName[i];
       system(instru.c_str());
     }
-   
+
+  ifstream popFile;
+  string path_to_file, path_to_folder, fileName;
+  path_to_file = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/popfiles_list.dat";
+  path_to_folder = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/";
+  ifstream fileList;
+  char* buffer;
   if(my_rank==MASTER)
     {
-      crFileID.open(path_to_control_run.c_str(), ios::binary);
+      fileList.open(path_to_file.c_str());
+      for(int j=local_Nc;j<Nc;j++)
+  	{
+  	  fileList >> fileName;
+  	  tag = j;
+  	  dest = j/local_Nc;
+  	  //BEWARE : MUST SEND STRING.LENGTH()+1 CHARACTERS BECAUSE OF THE FINAL \0 !
+  	  //OTHERWISE STRING IS CORRUPTED
+  	  MPI_Send((char*)fileName.c_str(), fileName.length()+1, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
+  	}
       for(int j=0;j<local_Nc;j++)
-	{
-	  crFileID.seekg(0, std::ios::beg); //Set cursor to beginning of file
-	  crFileID.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
-	}
-      crFileID.close();
+  	{
+  	  fileList >> fileName;
+  	  instru = path_to_folder + fileName;
+  	  popFile.open(instru.c_str(), ios::binary);
+  	  popFile.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  	  popFile.close();
+  	}
+      fileList.close();
+    }
+  else
+    {
+      buffer = new char[MAX_CHARS];
+      for(int j=0;j<local_Nc;j++)
+  	{
+  	  tag = j + my_rank*local_Nc;
+  	  MPI_Recv(buffer, MAX_CHARS, MPI_CHAR, MASTER, tag, MPI_COMM_WORLD, &status);
+  	  instru = path_to_folder + string(buffer);
+    	  popFile.open(instru.c_str(), ios::binary);
+  	  popFile.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  	  popFile.close();
+  	}
+      delete[] buffer;
     }
 
-  //BROADCAST OF INITIAL POPULATIONS FROM MASTER TO OTHER PROCESSES
-  for(int j=0;j<local_Nc;j++)
-    {
-      MPI_Bcast(&state[j][0], Dx*Dy*9, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-    }
+  // string fileName;
+  // if(my_rank==MASTER)
+  //   {
+  //     crFileID.open(path_to_control_run.c_str(), ios::binary);
+  //     for(int j=0;j<local_Nc;j++)
+  // 	{
+  // 	  crFileID.seekg(0, std::ios::beg); //Set cursor to beginning of file
+  // 	  crFileID.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  // 	}
+  //     crFileID.close();
+  //   }
+
+  // //BROADCAST OF INITIAL POPULATIONS FROM MASTER TO OTHER PROCESSES
+  // for(int j=0;j<local_Nc;j++)
+  //   {
+  //     MPI_Bcast(&state[j][0], Dx*Dy*9, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+  //   }
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
@@ -286,7 +331,6 @@ int main()
 	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
 	  for(int j=0;j<Nc;j++)
 	    {
-	      cout << s[j] << endl;
 	      //EACH COPY j LEADS TO nbCreatedCopies[j] CLONES (INCLUDING ITSELF)
 	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
 	      
