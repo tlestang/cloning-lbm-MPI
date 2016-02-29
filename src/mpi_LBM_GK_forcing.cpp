@@ -40,6 +40,7 @@ int main()
   double T = 2; // Total simulation time
   double dT = 2; // Cloning timestep
   double dT0 = 2.0/10.0;
+  double F0 = 0.00152554533819;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
@@ -57,7 +58,7 @@ int main()
 
   //VARIABLES FOR TLGK
   double phi_alpha, phi_theor;
-  double alpha=0.4, alphaMin = -0.5, alphaIncr = 0.004, alphaMax = 0.5;
+  double alpha=0.4, alphaMin = -0.5, alphaIncr = 0.025, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -251,7 +252,7 @@ int main()
 	      F = computeForceOnSquare(state[j], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F;
+	      s_ += F/F0;
 	    } //END LOOP ON TIMESTEPS
 
 	  for(int t=0;t<lbmTimeSteps2;t++)
@@ -278,7 +279,7 @@ int main()
 	      F = computeForceOnSquare(state[j], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F;
+	      s_ += F/F0;
 	    } //END LOOP ON TIMESTEPS
 
 	  output_file.close();
