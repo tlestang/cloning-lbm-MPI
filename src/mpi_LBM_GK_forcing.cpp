@@ -123,7 +123,7 @@ int main()
   //Set up variables and containers for output
   string folderName[local_Nc], instru;
   string masterFolderName = "output/";
-  ofstream output_file, weightsFile;
+  ofstream output_file, weightsFile, copiesFile;
   instru = "mkdir " + masterFolderName;
   if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
@@ -205,10 +205,13 @@ int main()
 
       if(my_rank==MASTER)
 	{
-	  stringstream weightsFileName;
+	  stringstream weightsFileName, copiesFileName;
 	  weightsFileName << "weights_evolution_" << t;
+	  copiesFileName << "copies_evolution_" << t;
 	  instru = masterFolderName + weightsFileName.str();
 	  weightsFile.open(instru.c_str(), ios::binary);
+	  instru = masterFolderName + copiesFileName.str();
+	  copiesFile.open(instru.c_str(), ios::binary);
 	}
       
       
@@ -333,9 +336,10 @@ int main()
 	    {
 	      //EACH COPY j LEADS TO nbCreatedCopies[j] CLONES (INCLUDING ITSELF)
 	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
-	      
 	      NcPrime += nbCreatedCopies[j]; //COMPUTE NcPrime BY COUNTING
 	    }
+	  //WRITE NB OF CREATED COPIES
+	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
 	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
 	  deltaN = NcPrime - Nc;
 	  //FILLS THE TEMP[] ARRAY FOR UNIFORM SAMPLING OVER THE NEW CLONES (SEE MANUAL)
@@ -383,6 +387,9 @@ int main()
 		}
 	    }
 
+	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
+	  copiesFile.close();
+	  
 	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
 	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
 	  //LOOP ON ALL Nc CLONES
