@@ -36,9 +36,9 @@ int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 4; // Number of clones
-  double T = 2; // Total simulation time
-  double dT = 2; // Cloning timestep
+  int Nc = 2; // Number of clones
+  double T = 40; // Total simulation time
+  double dT = 40; // Cloning timestep
   double dT0 = 2.0/10.0;
   double F0 = 0.00152554533819;
   //------------------------
@@ -58,7 +58,7 @@ int main()
 
   //VARIABLES FOR TLGK
   double phi_alpha, phi_theor;
-  double alpha=0.4, alphaMin = -0.5, alphaIncr = 0.025, alphaMax = 0.5;
+  double alpha=2.8, alphaMin = -0.5, alphaIncr = 0.025, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -123,7 +123,7 @@ int main()
 
   //Set up variables and containers for output
   string folderName[local_Nc], instru;
-  string masterFolderName = "output/";
+  string masterFolderName = "output_test/";
   ofstream output_file, weightsFile, copiesFile;
   instru = "mkdir " + masterFolderName;
   if(my_rank==MASTER){system(instru.c_str());}
@@ -252,7 +252,7 @@ int main()
 	      F = computeForceOnSquare(state[j], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F/F0;
+	      s_ += F/F0 - 1.0;
 	    } //END LOOP ON TIMESTEPS
 
 	  for(int t=0;t<lbmTimeSteps2;t++)
@@ -279,7 +279,7 @@ int main()
 	      F = computeForceOnSquare(state[j], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
-	      s_ += F/F0;
+	      s_ += F/F0 - 1.0;
 	    } //END LOOP ON TIMESTEPS
 
 	  output_file.close();
@@ -464,7 +464,15 @@ int main()
 	}
 
     } //TIMESTEPS
-
+  if(my_rank==MASTER)
+    {
+      instru = masterFolderName + "rvalues.dat";
+      //WRITE SEQUENCE OF R's ON DISK FOR SCGF CALCULATION LATER
+      ofstream rvalues(instru.c_str(), ios::binary);
+      rvalues.write((char*)&R_record[0], nbrTimeSteps*sizeof(double));
+      rvalues.close();
+    }
+  
   MPI_Finalize();
 } // MAIN()
 	  
