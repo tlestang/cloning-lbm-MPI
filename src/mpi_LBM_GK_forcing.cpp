@@ -36,9 +36,9 @@ int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 2; // Number of clones
-  double T = 40; // Total simulation time
-  double dT = 40; // Cloning timestep
+  int Nc = 8; // Number of clones
+  double T = 10; // Total simulation time
+  double dT = 5; // Cloning timestep
   double dT0 = 2.0/10.0;
   double F0 = 0.00152554533819;
   //------------------------
@@ -179,7 +179,7 @@ int main()
   	}
       delete[] buffer;
     }
-
+  MPI_Barrier(MPI_COMM_WORLD);
   // string fileName;
   // if(my_rank==MASTER)
   //   {
@@ -227,7 +227,8 @@ int main()
 	  fileName = folderName[j] + buf.str();
 	  output_file.open(fileName.c_str(), ios::binary);
 	  
-	  generate_random_field(Dx, map, error);	  
+	  generate_random_field(Dx, map, error);
+	  
 	  for(int t=0;t<lbmTimeSteps1;t++)
 	    {
 	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
@@ -290,7 +291,7 @@ int main()
 	  //UPDATE LOCAL AVERAGE WEIGHT
 	  R += s[j];
 	}
-
+      MPI_Barrier(MPI_COMM_WORLD);
 
       // ---------------------------------------------------------------------------------------------
       // ---------------------------------------------------------------------------------------------
@@ -322,7 +323,8 @@ int main()
 	  tag = 3;
 	  MPI_Send(&R, 1, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
 	}
-
+      MPI_Barrier(MPI_COMM_WORLD);
+      
       //MASTER POST-PROCESSES EVOLUTION OF COPIES AND DO THE CLONING
       if(my_rank==MASTER)
 	{
@@ -419,6 +421,10 @@ int main()
 		}
 	    }
 	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
+	  for(int i=0;i<nbComm;i++)
+	    {
+              cout << temp[2*i] << " ---> " << temp[2*i+1] << endl;
+            }
 	} // IF MASTER
 
 	  //BROADCAST OF NB OF COMM. FROM MASTER
@@ -427,6 +433,9 @@ int main()
       MPI_Barrier(MPI_COMM_WORLD);
       //BROADCAST OF COMMUNICATION TABLE TEMP[] FROM MASTER
       MPI_Bcast(&temp[0], 2*nbComm, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+
+      if(my_rank==MASTER){cout << "Now doing communications" << endl;}
+      
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
       // SOMETHING
@@ -440,23 +449,23 @@ int main()
 	  tag = i;
 	  if(dest == sender) //IF COMM. IS INTERNAL
 	    {
-	      if(sender == my_rank) //IF CLONES RESIDE IN PROC. my_rank
+	      if(my_rank == sender) //IF CLONES RESIDE IN PROC. my_rank
 		{
 		  //DO THE COPY
 		  state[cte%local_Nc] = state[ctm%local_Nc];
 		}
 	    }else{
-	    if(sender == my_rank) //IF PROC. MUST SEND A CLONE
+	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
 		cloneIdx = ctm%local_Nc;
-		MPI_Send(&state[cloneIdx], 3, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+		MPI_Send(state[cloneIdx], Dx*Dy*9, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
 	      }
-	    else if(dest == my_rank) //IF PROC. MUST RECEIVE A CLONE
+	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
 		cloneIdx = cte%local_Nc;
-		MPI_Recv(&state[cloneIdx], 3, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		MPI_Recv(state[cloneIdx], Dx*Dy*9, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
 	      }
 	  }
 	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
