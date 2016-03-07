@@ -36,7 +36,7 @@ int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 8; // Number of clones
+  int Nc = 4; // Number of clones
   double T = 10; // Total simulation time
   double dT = 5; // Cloning timestep
   double dT0 = 2.0/10.0;
@@ -95,13 +95,17 @@ int main()
   //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
   for(int i=0;i<1000;i++){rand();}
   
-  double **state;
-  state = new double*[local_Nc];
-    for(int j=0;j<local_Nc;j++)
-    {
-      // ONE POP ARRAY PER CLONE
-      state[j] = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double)); 
-    }
+  // double **state;
+  // state = new double*[local_Nc];
+  // for(int j=0;j<local_Nc;j++)
+  //   {
+  //     // ONE POP ARRAY PER CLONE
+  //     state[j] = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double)); 
+  //   }
+  double *state;
+  
+  state = (double *) memalign(getpagesize(), local_Nc*Dx*Dy*9*sizeof(double));
+  
   fout = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double));
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
@@ -160,7 +164,7 @@ int main()
   	  fileList >> fileName;
   	  instru = path_to_folder + fileName;
   	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  	  popFile.read((char*)&state[j*local_Nc], Dx*Dy*9*sizeof(double));
   	  popFile.close();
   	}
       fileList.close();
@@ -174,7 +178,7 @@ int main()
   	  MPI_Recv(buffer, MAX_CHARS, MPI_CHAR, MASTER, tag, MPI_COMM_WORLD, &status);
   	  instru = path_to_folder + string(buffer);
     	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  	  popFile.read((char*)&state[j*local_Nc], Dx*Dy*9*sizeof(double));
   	  popFile.close();
   	}
       delete[] buffer;
@@ -231,9 +235,9 @@ int main()
 	  
 	  for(int t=0;t<lbmTimeSteps1;t++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
-	      computeDomainNoSlipWalls_BB(fout, state[j]);
-	      computeSquareBounceBack_TEST(fout, state[j]);
+	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*local_Nc], fout, rho, ux, uy, beta0, map, tau);
+	      computeDomainNoSlipWalls_BB(fout, &state[j*local_Nc]);
+	      computeSquareBounceBack_TEST(fout, &state[j*local_Nc]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -246,11 +250,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      pivot = state[j];
-	      state[j] = fout;
-	      fout = pivot;
+	      // pivot = &state[j*local_Nc];
+	      // &state[j*local_Nc] = fout;
+	      // fout = pivot;
+	      memcpy(&state[j*local_Nc], fout, Dx*Dy*9*sizeof(double));
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(state[j], omega);
+	      F = computeForceOnSquare(&state[j*local_Nc], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
@@ -258,9 +263,9 @@ int main()
 
 	  for(int t=0;t<lbmTimeSteps2;t++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);
-	      computeDomainNoSlipWalls_BB(fout, state[j]);
-	      computeSquareBounceBack_TEST(fout, state[j]);
+	      streamingAndCollisionComputeMacroBodyForce(&state[j*local_Nc], fout, rho, ux, uy, beta0, tau);
+	      computeDomainNoSlipWalls_BB(fout, &state[j*local_Nc]);
+	      computeSquareBounceBack_TEST(fout, &state[j*local_Nc]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -273,11 +278,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      pivot = state[j];
-	      state[j] = fout;
-	      fout = pivot;
+	      memcpy(&state[j*local_Nc], fout, Dx*Dy*9*sizeof(double));
+	      // pivot = &state[j*local_Nc];
+	      // &state[j*local_Nc] = fout;
+	      // fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(state[j], omega);
+	      F = computeForceOnSquare(&state[j*local_Nc], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
@@ -452,20 +458,21 @@ int main()
 	      if(my_rank == sender) //IF CLONES RESIDE IN PROC. my_rank
 		{
 		  //DO THE COPY
-		  state[cte%local_Nc] = state[ctm%local_Nc];
+		  //state[cte%local_Nc] = state[ctm%local_Nc];
+		  memcpy(&state[(cte%local_Nc)*local_Nc], &state[(ctm%local_Nc)*local_Nc], Dx*Dy*9*sizeof(double));
 		}
 	    }else{
 	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
 		cloneIdx = ctm%local_Nc;
-		MPI_Send(state[cloneIdx], Dx*Dy*9, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+		MPI_Send(&state[cloneIdx*local_Nc], Dx*Dy*9, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
 	      }
 	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
 		cloneIdx = cte%local_Nc;
-		MPI_Recv(state[cloneIdx], Dx*Dy*9, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		MPI_Recv(&state[cloneIdx*local_Nc], Dx*Dy*9, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
 	      }
 	  }
 	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
