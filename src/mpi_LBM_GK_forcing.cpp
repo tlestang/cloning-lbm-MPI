@@ -74,6 +74,7 @@ int main()
   Dy = 4*Ly + 1, Dx = Dy;
   xmin = (Dx-1)/2; xmax = xmin + Lx;
   ymin = (Dy-1)/2 - Ly/2; ymax = ymin + Ly;
+  int N = Dx*Dy*9;
   double cs = 1./sqrt(3); double rho0 = 1.0;
   double nu = 1./3.*(tau-0.5);
   double u0 = cs*cs*Ma; double uxSum, uxMean;
@@ -100,13 +101,13 @@ int main()
   // for(int j=0;j<local_Nc;j++)
   //   {
   //     // ONE POP ARRAY PER CLONE
-  //     state[j] = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double)); 
+  //     state[j] = (double *) memalign(getpagesize(), N*sizeof(double)); 
   //   }
   double *state;
   
-  state = (double *) memalign(getpagesize(), local_Nc*Dx*Dy*9*sizeof(double));
+  state = (double *) memalign(getpagesize(), local_Nc*N*sizeof(double));
   
-  fout = (double *) memalign(getpagesize(), Dx*Dy*9*sizeof(double));
+  fout = (double *) memalign(getpagesize(), N*sizeof(double));
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   uy = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
@@ -164,7 +165,7 @@ int main()
   	  fileList >> fileName;
   	  instru = path_to_folder + fileName;
   	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j*local_Nc], Dx*Dy*9*sizeof(double));
+  	  popFile.read((char*)&state[j*N], N*sizeof(double));
   	  popFile.close();
   	}
       fileList.close();
@@ -178,7 +179,7 @@ int main()
   	  MPI_Recv(buffer, MAX_CHARS, MPI_CHAR, MASTER, tag, MPI_COMM_WORLD, &status);
   	  instru = path_to_folder + string(buffer);
     	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j*local_Nc], Dx*Dy*9*sizeof(double));
+  	  popFile.read((char*)&state[j*N], N*sizeof(double));
   	  popFile.close();
   	}
       delete[] buffer;
@@ -191,7 +192,7 @@ int main()
   //     for(int j=0;j<local_Nc;j++)
   // 	{
   // 	  crFileID.seekg(0, std::ios::beg); //Set cursor to beginning of file
-  // 	  crFileID.read((char*)&state[j][0], Dx*Dy*9*sizeof(double));
+  // 	  crFileID.read((char*)&state[j][0], N*sizeof(double));
   // 	}
   //     crFileID.close();
   //   }
@@ -199,7 +200,7 @@ int main()
   // //BROADCAST OF INITIAL POPULATIONS FROM MASTER TO OTHER PROCESSES
   // for(int j=0;j<local_Nc;j++)
   //   {
-  //     MPI_Bcast(&state[j][0], Dx*Dy*9, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+  //     MPI_Bcast(&state[j][0], N, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
   //   }
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
@@ -235,9 +236,9 @@ int main()
 	  
 	  for(int t=0;t<lbmTimeSteps1;t++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*local_Nc], fout, rho, ux, uy, beta0, map, tau);
-	      computeDomainNoSlipWalls_BB(fout, &state[j*local_Nc]);
-	      computeSquareBounceBack_TEST(fout, &state[j*local_Nc]);
+	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
+	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
+	      computeSquareBounceBack_TEST(fout, &state[j*N]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -250,12 +251,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      // pivot = &state[j*local_Nc];
-	      // &state[j*local_Nc] = fout;
+	      // pivot = &state[j*N];
+	      // &state[j*N] = fout;
 	      // fout = pivot;
-	      memcpy(&state[j*local_Nc], fout, Dx*Dy*9*sizeof(double));
+	      memcpy(&state[j*N], fout, N*sizeof(double));
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(&state[j*local_Nc], omega);
+	      F = computeForceOnSquare(&state[j*N], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
@@ -263,9 +264,9 @@ int main()
 
 	  for(int t=0;t<lbmTimeSteps2;t++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForce(&state[j*local_Nc], fout, rho, ux, uy, beta0, tau);
-	      computeDomainNoSlipWalls_BB(fout, &state[j*local_Nc]);
-	      computeSquareBounceBack_TEST(fout, &state[j*local_Nc]);
+	      streamingAndCollisionComputeMacroBodyForce(&state[j*N], fout, rho, ux, uy, beta0, tau);
+	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
+	      computeSquareBounceBack_TEST(fout, &state[j*N]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -278,12 +279,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      memcpy(&state[j*local_Nc], fout, Dx*Dy*9*sizeof(double));
-	      // pivot = &state[j*local_Nc];
-	      // &state[j*local_Nc] = fout;
+	      memcpy(&state[j*N], fout, N*sizeof(double));
+	      // pivot = &state[j*N];
+	      // &state[j*N] = fout;
 	      // fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(&state[j*local_Nc], omega);
+	      F = computeForceOnSquare(&state[j*N], omega);
 	      output_file.write((char*)&F, sizeof(double));
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
@@ -459,20 +460,20 @@ int main()
 		{
 		  //DO THE COPY
 		  //state[cte%local_Nc] = state[ctm%local_Nc];
-		  memcpy(&state[(cte%local_Nc)*local_Nc], &state[(ctm%local_Nc)*local_Nc], Dx*Dy*9*sizeof(double));
+		  memcpy(&state[(cte%local_Nc)*local_Nc], &state[(ctm%local_Nc)*local_Nc], N*sizeof(double));
 		}
 	    }else{
 	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
 		cloneIdx = ctm%local_Nc;
-		MPI_Send(&state[cloneIdx*local_Nc], Dx*Dy*9, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+		MPI_Send(&state[cloneIdx*local_Nc], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
 	      }
 	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
 		cloneIdx = cte%local_Nc;
-		MPI_Recv(&state[cloneIdx*local_Nc], Dx*Dy*9, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		MPI_Recv(&state[cloneIdx*local_Nc], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
 	      }
 	  }
 	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
