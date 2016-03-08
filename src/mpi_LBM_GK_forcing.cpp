@@ -36,9 +36,9 @@ int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 4; // Number of clones
-  double T = 10; // Total simulation time
-  double dT = 5; // Cloning timestep
+  int Nc = 8; // Number of clones
+  double T = 4; // Total simulation time
+  double dT = 2; // Cloning timestep
   double dT0 = 2.0/10.0;
   double F0 = 0.00152554533819;
   //------------------------
@@ -105,8 +105,8 @@ int main()
   //   }
   double *state;
   
-  state = (double *) memalign(getpagesize(), local_Nc*N*sizeof(double));
-  
+  //state = (double *) memalign(getpagesize(), local_Nc*N*sizeof(double));
+  state = new double[local_Nc*N*sizeof(double)];
   fout = (double *) memalign(getpagesize(), N*sizeof(double));
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
@@ -120,30 +120,32 @@ int main()
   int nbCreatedCopies[Nc];
   double R_record[nbrTimeSteps]; double R, total_R;
 
-  string path_to_control_run;
-  path_to_control_run = "/home/thibault/tailleur_lecomte/lbm/L32_square_domain_pops.dat";
-  ifstream crFileID;
-
   MPI_Status status;
 
   //Set up variables and containers for output
   string folderName[local_Nc], instru;
   string masterFolderName = "output_test/";
-  ofstream output_file, weightsFile, copiesFile;
+  stringstream weightsFileName, copiesFileName, buf;
+  ofstream weightsFile, copiesFile;
+#ifdef FORCE_IO
+  ofstream output_file;
+#endif
   instru = "mkdir " + masterFolderName;
   if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
   for(int i=0;i<local_Nc;i++)
     {
-      stringstream buf;
       buf << "clone_" << i + my_rank*local_Nc;
       folderName[i] = masterFolderName + buf.str();
+      buf.str(string());
+      buf.clear();
       instru = "mkdir " + folderName[i];
       system(instru.c_str());
     }
 
   ifstream popFile;
   string path_to_file, path_to_folder, fileName;
+
   path_to_file = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/popfiles_list.dat";
   path_to_folder = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/";
   ifstream fileList;
@@ -211,32 +213,45 @@ int main()
 
       if(my_rank==MASTER)
 	{
-	  stringstream weightsFileName, copiesFileName;
 	  weightsFileName << "weights_evolution_" << t;
 	  copiesFileName << "copies_evolution_" << t;
 	  instru = masterFolderName + weightsFileName.str();
 	  weightsFile.open(instru.c_str(), ios::binary);
 	  instru = masterFolderName + copiesFileName.str();
 	  copiesFile.open(instru.c_str(), ios::binary);
+	  weightsFileName.str(string());
+	  weightsFileName.clear();
+	  copiesFileName.str(string());
+	  copiesFileName.clear();
 	}
-      
       
       //SIMULATE THE SYSTEM DURING dT AND COMPUTE WEIGHT
       for(int j=0;j<local_Nc;j++) // Loop on clones
 	{
 	  
 	  s_ = 0;
-
-	  stringstream buf;
+	  
+#ifdef FORCE_IO
 	  buf << "/evolution_" << t << "_" << "clone_" << j+my_rank*local_Nc;
 	  fileName = folderName[j] + buf.str();
-	  output_file.open(fileName.c_str(), ios::binary);
+	  buf.str(string());
+	  buf.clear();
+	  output_file.open("test", ios::binary);
+#endif
+
+	  //cout << "Process " << my_rank << "t = " << t << "j = " << j << endl;
 	  
-	  generate_random_field(Dx, map, error);
-	  
-	  for(int t=0;t<lbmTimeSteps1;t++)
+	  //MPI_Barrier(MPI_COMM_WORLD);
+	  //generate_random_field(Dx, map, error);
+	  // cout << "PROCESS " << my_rank << endl;
+	  // MPI_Barrier(MPI_COMM_WORLD);
+
+
+	  for(int tt=0;tt<lbmTimeSteps1;tt++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
+	      //streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
+	      streamingAndCollisionComputeMacroBodyForce(&state[j*N], fout, rho, ux, uy, beta0, tau);
+	      if(t > 0 && my_rank==MASTER){cout << "I'm here t = " << tt << endl;}
 	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
 	      computeSquareBounceBack_TEST(fout, &state[j*N]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
@@ -257,12 +272,14 @@ int main()
 	      memcpy(&state[j*N], fout, N*sizeof(double));
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(&state[j*N], omega);
+#ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
+#endif
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
 	    } //END LOOP ON TIMESTEPS
-
-	  for(int t=0;t<lbmTimeSteps2;t++)
+	  
+	  for(int tt=0;tt<lbmTimeSteps2;tt++)
 	    {
 	      streamingAndCollisionComputeMacroBodyForce(&state[j*N], fout, rho, ux, uy, beta0, tau);
 	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
@@ -285,12 +302,15 @@ int main()
 	      // fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(&state[j*N], omega);
+#ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
+#endif
 	      // COMPUTE WEIGHT
 	      s_ += F/F0 - 1.0;
 	    } //END LOOP ON TIMESTEPS
-
+#ifdef FORCE_IO
 	  output_file.close();
+#endif
 	  
 	  s_ *= delta_t;
 	  //STORE WEIGHT IN WEIGHTS ARRAY s[local_Nc]
@@ -312,6 +332,7 @@ int main()
       //COMMUNICATIONS BETWEEN MASTER AND OTHER PROCESSES PRIOR TO CLONING STEP
       if(my_rank==MASTER)
 	{
+	  cout << "OK" << endl;
 	  total_R = R; //COMPUTE MASTER's CONTRIB. TO TOTAL AVERAGE WEIGHT TOTAL_R
 	  //GATHER WEIGHTS AND LOCAL AVERAGE WEIGHTS FROM OTHER PROCESSES
 	  for(int source=1;source<p;source++)
@@ -442,6 +463,13 @@ int main()
       MPI_Bcast(&temp[0], 2*nbComm, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
 
       if(my_rank==MASTER){cout << "Now doing communications" << endl;}
+
+      //----------------------------
+      for(int j=0;j<local_Nc;j++)
+	{
+	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(&state[j*N], omega) << endl;
+	}
+      
       
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
@@ -460,26 +488,36 @@ int main()
 		{
 		  //DO THE COPY
 		  //state[cte%local_Nc] = state[ctm%local_Nc];
-		  memcpy(&state[(cte%local_Nc)*local_Nc], &state[(ctm%local_Nc)*local_Nc], N*sizeof(double));
+		  memcpy(&state[(cte%local_Nc)*N], &state[(ctm%local_Nc)*N], N*sizeof(double));
 		}
 	    }else{
 	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
 		cloneIdx = ctm%local_Nc;
-		MPI_Send(&state[cloneIdx*local_Nc], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+		MPI_Send(&state[cloneIdx*N], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
 	      }
 	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
 	      {
 		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
 		cloneIdx = cte%local_Nc;
-		MPI_Recv(&state[cloneIdx*local_Nc], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		MPI_Recv(&state[cloneIdx*N], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
 	      }
 	  }
 	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
-	  MPI_Barrier(MPI_COMM_WORLD);
 	}
-
+      MPI_Barrier(MPI_COMM_WORLD);
+      if(my_rank == MASTER)
+	{
+	  cout << "------ AFTER COMM ------- " << endl;
+	}
+      MPI_Barrier(MPI_COMM_WORLD);
+      for(int j=0;j<local_Nc;j++)
+	{
+	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(&state[j*N], omega) << endl;
+	}
+      MPI_Barrier(MPI_COMM_WORLD);
+      
     } //TIMESTEPS
   if(my_rank==MASTER)
     {
@@ -489,7 +527,6 @@ int main()
       rvalues.write((char*)&R_record[0], nbrTimeSteps*sizeof(double));
       rvalues.close();
     }
-  
   MPI_Finalize();
 } // MAIN()
 	  

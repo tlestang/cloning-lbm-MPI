@@ -72,7 +72,12 @@ void generate_random_field(int n, double* map_, int &error)
 	      col[RIdx][j] = Rows[RIdx][n-ii];
 	    }
     }
-  delete[] Rows; delete[] Cols;
+    for (int i=0;i<n;i++)
+      {
+	delete[] Rows[i];
+	delete[] Cols[i];
+      }
+    delete[] Rows; delete[] Cols;
 
   //Now pad the row with the two (M) long rows of last circulant blocks.
   // These are transp(C_n),...,transp(C_2)
@@ -103,7 +108,15 @@ void generate_random_field(int n, double* map_, int &error)
 	  // DIVIDES DIRECTLY BY SIZE OF VECTOR (2*n-1)X(2*n-1)
   	}
     }
-    delete[] col; delete[] row;
+  for (int i=0;i<n;i++)
+    {
+      delete[] col[i];
+    }
+  for (int i=0;i<M;i++)
+    {
+      delete[] row[i];
+    }
+  delete[] col; delete[] row;
 
 
   // Compute eigen values and free G to save memory
