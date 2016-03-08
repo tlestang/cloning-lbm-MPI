@@ -32,11 +32,12 @@ int c[9][2] = {{0,0}, {1,0}, {0,1}, {-1,0}, {0,-1}, {1,1}, {-1,1}, {-1,-1}, {1,-
 double w[9]={4.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0};
 int Dx, Dy, xmin, xmax, ymin, ymax;
 
-int main()
+int main(int argc, char *argv[])
+//int main()
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 8; // Number of clones
+  int Nc = 16; // Number of clones
   double T = 4; // Total simulation time
   double dT = 2; // Cloning timestep
   double dT0 = 2.0/10.0;
@@ -86,7 +87,8 @@ int main()
   int lbmTimeSteps1 = floor(dT0/delta_t);
   int lbmTimeSteps2 = floor((dT-dT0)/delta_t);
    
-  MPI_Init(NULL, NULL);
+  MPI_Init(&argc, &argv);
+  //MPI_Init(NULL, NULL);
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
   MPI_Comm_size(MPI_COMM_WORLD,&p);
   local_Nc = Nc/p;
@@ -96,17 +98,17 @@ int main()
   //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
   for(int i=0;i<1000;i++){rand();}
   
-  // double **state;
-  // state = new double*[local_Nc];
-  // for(int j=0;j<local_Nc;j++)
-  //   {
-  //     // ONE POP ARRAY PER CLONE
-  //     state[j] = (double *) memalign(getpagesize(), N*sizeof(double)); 
-  //   }
-  double *state;
+  double **state;
+  state = new double*[local_Nc];
+  for(int j=0;j<local_Nc;j++)
+    {
+      // ONE POP ARRAY PER CLONE
+      state[j] = (double *) memalign(getpagesize(), N*sizeof(double)); 
+    }
+  //double *state;
   
   //state = (double *) memalign(getpagesize(), local_Nc*N*sizeof(double));
-  state = new double[local_Nc*N*sizeof(double)];
+  //state = new double[local_Nc*N*sizeof(double)];
   fout = (double *) memalign(getpagesize(), N*sizeof(double));
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
@@ -167,7 +169,7 @@ int main()
   	  fileList >> fileName;
   	  instru = path_to_folder + fileName;
   	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j*N], N*sizeof(double));
+  	  popFile.read((char*)&state[j][0], N*sizeof(double));
   	  popFile.close();
   	}
       fileList.close();
@@ -181,7 +183,7 @@ int main()
   	  MPI_Recv(buffer, MAX_CHARS, MPI_CHAR, MASTER, tag, MPI_COMM_WORLD, &status);
   	  instru = path_to_folder + string(buffer);
     	  popFile.open(instru.c_str(), ios::binary);
-  	  popFile.read((char*)&state[j*N], N*sizeof(double));
+  	  popFile.read((char*)&state[j][0], N*sizeof(double));
   	  popFile.close();
   	}
       delete[] buffer;
@@ -236,7 +238,7 @@ int main()
 	  fileName = folderName[j] + buf.str();
 	  buf.str(string());
 	  buf.clear();
-	  output_file.open("test", ios::binary);
+	  output_file.open(fileName.c_str(), ios::binary);
 #endif
 
 	  //cout << "Process " << my_rank << "t = " << t << "j = " << j << endl;
@@ -249,9 +251,9 @@ int main()
 
 	  for(int tt=0;tt<lbmTimeSteps1;tt++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
-	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
-	      computeSquareBounceBack_TEST(fout, &state[j*N]);
+	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
+	      computeDomainNoSlipWalls_BB(fout, state[j]);
+	      computeSquareBounceBack_TEST(fout, state[j]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -264,12 +266,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      // pivot = &state[j*N];
-	      // &state[j*N] = fout;
-	      // fout = pivot;
-	      memcpy(&state[j*N], fout, N*sizeof(double));
+	      pivot = state[j];
+	      state[j] = fout;
+	      fout = pivot;
+	      //	      memcpy(state[j], fout, N*sizeof(double));
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(&state[j*N], omega);
+	      F = computeForceOnSquare(state[j], omega);
 #ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
 #endif
@@ -279,9 +281,9 @@ int main()
 	  
 	  for(int tt=0;tt<lbmTimeSteps2;tt++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForce(&state[j*N], fout, rho, ux, uy, beta0, tau);
-	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
-	      computeSquareBounceBack_TEST(fout, &state[j*N]);
+	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);
+	      computeDomainNoSlipWalls_BB(fout, state[j]);
+	      computeSquareBounceBack_TEST(fout, state[j]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
 	      for(int x=xmin+1;x<xmax;x++)
 		{
@@ -294,12 +296,12 @@ int main()
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      memcpy(&state[j*N], fout, N*sizeof(double));
-	      // pivot = &state[j*N];
-	      // &state[j*N] = fout;
-	      // fout = pivot;
+	      //memcpy(state[j], fout, N*sizeof(double));
+	      pivot = state[j];
+	      state[j] = fout;
+	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(&state[j*N], omega);
+	      F = computeForceOnSquare(state[j], omega);
 #ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
 #endif
@@ -318,202 +320,208 @@ int main()
 	}
       MPI_Barrier(MPI_COMM_WORLD);
 
+
+
+      
+
       // ---------------------------------------------------------------------------------------------
       // ---------------------------------------------------------------------------------------------
 
-      //NOW TIME EVOLUTION OF COPIES IS DONE AND WE MUST :
-      // -- DETERMINE HOW MANY CLONES ARE GENERATED BY EACH COPY
-      // -- CLONE/PRUNE TO STICK TO A CONSTANT NUMBER OF COPIES AT T + dT
-      // -- CREATE INITIAL CONDITION FOR NEXT ITERATION (TIME EVOLUTION)
+      // //NOW TIME EVOLUTION OF COPIES IS DONE AND WE MUST :
+      // // -- DETERMINE HOW MANY CLONES ARE GENERATED BY EACH COPY
+      // // -- CLONE/PRUNE TO STICK TO A CONSTANT NUMBER OF COPIES AT T + dT
+      // // -- CREATE INITIAL CONDITION FOR NEXT ITERATION (TIME EVOLUTION)
        
 
       //COMMUNICATIONS BETWEEN MASTER AND OTHER PROCESSES PRIOR TO CLONING STEP
       if(my_rank==MASTER)
-	{
-	  total_R = R; //COMPUTE MASTER's CONTRIB. TO TOTAL AVERAGE WEIGHT TOTAL_R
-	  //GATHER WEIGHTS AND LOCAL AVERAGE WEIGHTS FROM OTHER PROCESSES
-	  for(int source=1;source<p;source++)
-	    {
-	      tag = 1;
-	      MPI_Recv(&s[source*local_Nc], local_Nc, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
-	      tag = 3;
-	      MPI_Recv(&R, 1, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
-	      total_R += R;
-	    }
-	}
+      	{
+      	  total_R = R; //COMPUTE MASTER's CONTRIB. TO TOTAL AVERAGE WEIGHT TOTAL_R
+      	  //GATHER WEIGHTS AND LOCAL AVERAGE WEIGHTS FROM OTHER PROCESSES
+      	  for(int source=1;source<p;source++)
+      	    {
+      	      tag = source;
+      	      MPI_Recv(&s[source*local_Nc], local_Nc, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
+      	      tag = 2*source;
+      	      MPI_Recv(&R, 1, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
+      	      total_R += R;
+      	    }
+      	}
       else //SEND s[] VALUES FOR THE PROCESS'S CLONES AND LOCAL AVERAGE WEIGHT TO MASTER
-	{
-	  tag = 1;
-	  MPI_Send(&s[0], local_Nc, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
-	  tag = 3;
-	  MPI_Send(&R, 1, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
-	}
+      	{
+      	  tag = my_rank;
+      	  MPI_Send(&s[0], local_Nc, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
+      	  tag = 2*my_rank;
+      	  MPI_Send(&R, 1, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
+      	}
       MPI_Barrier(MPI_COMM_WORLD);
       
       //MASTER POST-PROCESSES EVOLUTION OF COPIES AND DO THE CLONING
       if(my_rank==MASTER)
-	{
-	  //WRITE WEIGHTS ON DISK
-	  weightsFile.write((char*)&s[0], Nc*sizeof(double));
-	  weightsFile.close();
+      	{
+      	  //WRITE WEIGHTS ON DISK
+      	  weightsFile.write((char*)&s[0], Nc*sizeof(double));
+      	  weightsFile.close();
 
-	  total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
+      	  total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
 
-	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
-	  for(int j=0;j<Nc;j++)
-	    {
-	      //EACH COPY j LEADS TO nbCreatedCopies[j] CLONES (INCLUDING ITSELF)
-	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
-	      NcPrime += nbCreatedCopies[j]; //COMPUTE NcPrime BY COUNTING
-	    }
-	  //WRITE NB OF CREATED COPIES
-	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
-	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
-	  deltaN = NcPrime - Nc;
-	  //FILLS THE TEMP[] ARRAY FOR UNIFORM SAMPLING OVER THE NEW CLONES (SEE MANUAL)
-	  k=0;
-	  for(int j=0;j<Nc;j++)
-	    {
-	      for(int i=0;i<nbCreatedCopies[j];i++)
-		{
-		  temp[k] = j;
-		  k++;
-		}
-	    }
+      	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
+      	  for(int j=0;j<Nc;j++)
+      	    {
+      	      //EACH COPY j LEADS TO nbCreatedCopies[j] CLONES (INCLUDING ITSELF)
+      	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
+      	      NcPrime += nbCreatedCopies[j]; //COMPUTE NcPrime BY COUNTING
+      	    }
+      	  //WRITE NB OF CREATED COPIES
+      	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
+      	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
+      	  deltaN = NcPrime - Nc;
+      	  //FILLS THE TEMP[] ARRAY FOR UNIFORM SAMPLING OVER THE NEW CLONES (SEE MANUAL)
+      	  k=0;
+      	  for(int j=0;j<Nc;j++)
+      	    {
+      	      for(int i=0;i<nbCreatedCopies[j];i++)
+      		{
+      		  temp[k] = j;
+      		  k++;
+      		}
+      	    }
+	
 
-	  //  -------------------------------------------------------------------------------------------
-	  //  -------------------------------------------------------------------------------------------
+      	  //  -------------------------------------------------------------------------------------------
+      	  //  -------------------------------------------------------------------------------------------
 
 	  
-	  // CLONING/PRUNING PHASE
-	  if(deltaN > 0) // IF NcPrime > Nc KILL deltaN CLONES
-	    {
-	      for(int i=0;i<deltaN;i++)
-		{
-		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
-		  idx = rand()%(NcPrime-i); //random number between [0:NcPrime-i-1]
-		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
-		  cloneIdx = temp[idx];
-		  //RECORD THE KILL
-		  nbCreatedCopies[cloneIdx]--;
-		  //UPDATE TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
-		  //(SEE MANUAL)
-		  temp[idx] = temp[NcPrime-i-1];
-		}
-	    }
+      	  // CLONING/PRUNING PHASE
+      	  if(deltaN > 0) // IF NcPrime > Nc KILL deltaN CLONES
+      	    {
+      	      for(int i=0;i<deltaN;i++)
+      		{
+      		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
+      		  idx = rand()%(NcPrime-i); //random number between [0:NcPrime-i-1]
+      		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
+      		  cloneIdx = temp[idx];
+      		  //RECORD THE KILL
+      		  nbCreatedCopies[cloneIdx]--;
+      		  //UPDATE TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
+      		  //(SEE MANUAL)
+      		  temp[idx] = temp[NcPrime-i-1];
+      		}
+      	    }
 		
-	  else if(deltaN < 0) // IF NcPrime < Nc ADD deltaN CLONE OF RANDOM COPIES
-	    {
-	      for(int i=0;i<-deltaN;i++)
-		{
-		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
-		  idx = rand()%NcPrime;
-		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
-		  cloneIdx = temp[idx];
-		  //RECORD THE KILL
-		  nbCreatedCopies[cloneIdx]++;
-		}
-	    }
+      	  else if(deltaN < 0) // IF NcPrime < Nc ADD deltaN CLONE OF RANDOM COPIES
+      	    {
+      	      for(int i=0;i<-deltaN;i++)
+      		{
+      		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
+      		  idx = rand()%NcPrime;
+      		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
+      		  cloneIdx = temp[idx];
+      		  //RECORD THE KILL
+      		  nbCreatedCopies[cloneIdx]++;
+      		}
+      	    }
 
-	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
-	  copiesFile.close();
+      	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
+      	  copiesFile.close();
 	  
-	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
-	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
-	  //LOOP ON ALL Nc CLONES
-	  for(int i=0;i<Nc;i++) 
-	    {
-	      //IF COPY GAVE BIRTH TO CLONES, LOOP ON THEM
-	      while(nbCreatedCopies[i] > 1)
-		{
-		  flag = true; k=0;
-		  //SEARCH FOR A KILLED COPY TO REPLACE IT BY THE CLONE OF COPY i
-		  while(flag)
-		    {
-		      if(nbCreatedCopies[k]==0) //IF COPY k WERE KILLED
-			{
-			  //RECORD THE COMMUNICATION IN TEMP[]
-			  temp[2*nbComm] = i; // AN INSTANCE OF COPY i MUST REPLACE COPY k
-			  temp[2*nbComm+1] = k; // COPY k must be replaced by A CLONE OF COPY i
-			  //NEXT LINE SO THAT COPY k IS NOT CHOSEN AGAIN IN FURTHER ITERATIONS 
-			  nbCreatedCopies[k] = -1; 
-			  nbComm++; //COMPUTE THE NB OF COMM. BY COUNTING
-			  flag = false; //EXIT WHILE LOOP WHEN FOUND A PLACE FOR CLONE OF COPY i
-			}
-		      k++;
-		    }
-		  nbCreatedCopies[i]--; //RECORD THAT 1 CLONE OF COPY i HAS BEEN TAKEN CARE OF
-		}
-	    }
-	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
-	  for(int i=0;i<nbComm;i++)
-	    {
-              cout << temp[2*i] << " ---> " << temp[2*i+1] << endl;
-            }
+      	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
+      	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
+      	  //LOOP ON ALL Nc CLONES
+      	  for(int i=0;i<Nc;i++) 
+      	    {
+      	      //IF COPY GAVE BIRTH TO CLONES, LOOP ON THEM
+      	      while(nbCreatedCopies[i] > 1)
+      		{
+      		  flag = true; k=0;
+      		  //SEARCH FOR A KILLED COPY TO REPLACE IT BY THE CLONE OF COPY i
+      		  while(flag)
+      		    {
+      		      if(nbCreatedCopies[k]==0) //IF COPY k WERE KILLED
+      			{
+      			  //RECORD THE COMMUNICATION IN TEMP[]
+      			  temp[2*nbComm] = i; // AN INSTANCE OF COPY i MUST REPLACE COPY k
+      			  temp[2*nbComm+1] = k; // COPY k must be replaced by A CLONE OF COPY i
+      			  //NEXT LINE SO THAT COPY k IS NOT CHOSEN AGAIN IN FURTHER ITERATIONS 
+      			  nbCreatedCopies[k] = -1; 
+      			  nbComm++; //COMPUTE THE NB OF COMM. BY COUNTING
+      			  flag = false; //EXIT WHILE LOOP WHEN FOUND A PLACE FOR CLONE OF COPY i
+      			}
+      		      k++;
+      		    }
+      		  nbCreatedCopies[i]--; //RECORD THAT 1 CLONE OF COPY i HAS BEEN TAKEN CARE OF
+      		}
+      	    }
+      	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
+      	  // for(int i=0;i<nbComm;i++)
+      	  //   {
+          //     cout << temp[2*i] << " ---> " << temp[2*i+1] << endl;
+          //   }
 	} // IF MASTER
 
-	  //BROADCAST OF NB OF COMM. FROM MASTER
+      //MPI_Barrier(MPI_COMM_WORLD);
+      //BROADCAST OF NB OF COMM. FROM MASTER
       MPI_Bcast(&nbComm, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
       //MAKE SURE EACH AND EVERY PROCESS KNOWs THE NB OF COMM. BEFORE RECEVING COMM TABLE
-      MPI_Barrier(MPI_COMM_WORLD);
+      //MPI_Barrier(MPI_COMM_WORLD);
       //BROADCAST OF COMMUNICATION TABLE TEMP[] FROM MASTER
-      MPI_Bcast(&temp[0], 2*nbComm, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+      MPI_Bcast(&temp[0], 2*nbComm, MPI_INT, MASTER, MPI_COMM_WORLD);
 
-      if(my_rank==MASTER){cout << "Now doing communications" << endl;}
+      //if(my_rank==MASTER){cout << "Now doing communications" << endl;}
 
-      //----------------------------
-      for(int j=0;j<local_Nc;j++)
-	{
-	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(&state[j*N], omega) << endl;
-	}
+      // //----------------------------
+      // // for(int j=0;j<local_Nc;j++)
+      // // 	{
+      // // 	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(state[j], omega) << endl;
+      // // 	}
       
       
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
       // SOMETHING
       for(int i=0;i<nbComm;i++)
-	{
-	  //COMPUTE THE ABSOLUTE INDEXES OF CLONES CONCERNED BY COMMUNICATION
-	  ctm = temp[2*i]; cte = temp[2*i+1]; //ctm == clone_to_move | cte == clone_to_erase
-	  //COMPUTE RANK OF PROC. SENDING AND PROC. RECEIVING
-	  //ALL VARIABLES ARE INTEGERS SO DIVISIONS ARE EUCLIDIAN.
-	  sender = ctm/local_Nc; dest = cte/local_Nc; 
-	  tag = i;
-	  if(dest == sender) //IF COMM. IS INTERNAL
-	    {
-	      if(my_rank == sender) //IF CLONES RESIDE IN PROC. my_rank
-		{
-		  //DO THE COPY
-		  //state[cte%local_Nc] = state[ctm%local_Nc];
-		  memcpy(&state[(cte%local_Nc)*N], &state[(ctm%local_Nc)*N], N*sizeof(double));
-		}
-	    }else{
-	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
-	      {
-		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
-		cloneIdx = ctm%local_Nc;
-		MPI_Send(&state[cloneIdx*N], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
-	      }
-	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
-	      {
-		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
-		cloneIdx = cte%local_Nc;
-		MPI_Recv(&state[cloneIdx*N], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
-	      }
-	  }
-	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
-	}
+      	{
+      	  //COMPUTE THE ABSOLUTE INDEXES OF CLONES CONCERNED BY COMMUNICATION
+      	  ctm = temp[2*i]; cte = temp[2*i+1]; //ctm == clone_to_move | cte == clone_to_erase
+      	  //COMPUTE RANK OF PROC. SENDING AND PROC. RECEIVING
+      	  //ALL VARIABLES ARE INTEGERS SO DIVISIONS ARE EUCLIDIAN.
+      	  sender = ctm/local_Nc; dest = cte/local_Nc; 
+      	  tag = i;
+      	  if(dest == sender) //IF COMM. IS INTERNAL
+      	    {
+      	      if(my_rank == sender) //IF CLONES RESIDE IN PROC. my_rank
+      		{
+      		  //DO THE COPY
+      		  state[cte%local_Nc] = state[ctm%local_Nc];
+      		  //memcpy(&state[(cte%local_Nc)*N], &state[(ctm%local_Nc)*N], N*sizeof(double));
+      		}
+      	    }else{
+      	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
+      	      {
+      		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
+      		cloneIdx = ctm%local_Nc;
+      		MPI_Send(state[cloneIdx], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+      	      }
+      	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
+      	      {
+      		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
+      		cloneIdx = cte%local_Nc;
+      		MPI_Recv(state[cloneIdx], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+      	      }
+      	  }
+      	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
+      	}
       MPI_Barrier(MPI_COMM_WORLD);
-      if(my_rank == MASTER)
-	{
-	  cout << "------ AFTER COMM ------- " << endl;
-	}
-      MPI_Barrier(MPI_COMM_WORLD);
-      for(int j=0;j<local_Nc;j++)
-	{
-	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(&state[j*N], omega) << endl;
-	}
-      MPI_Barrier(MPI_COMM_WORLD);
+      // if(my_rank == MASTER)
+      // 	{
+      // 	  cout << "------ AFTER COMM ------- " << endl;
+      // 	}
+      // // MPI_Barrier(MPI_COMM_WORLD);
+      // // for(int j=0;j<local_Nc;j++)
+      // // 	{
+      // // 	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(state[j], omega) << endl;
+      // // 	}
+      // // MPI_Barrier(MPI_COMM_WORLD);
       
     } //TIMESTEPS
   if(my_rank==MASTER)

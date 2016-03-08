@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 L = 32
 nu = (1.0/3)*(0.502-0.5)
 
-filename = '../output_test/clone_2/evolution_1_clone_2'
+filename = '../output_test/clone_2/evolution_0_clone_2'
 f1 = open(filename, 'rb')
 u = np.fromfile(f1, dtype=np.double)
 
-filename = '../output_test/clone_4/evolution_0_clone_4'
+filename = '../output_test/clone_2/evolution_1_clone_2'
 f1 = open(filename, 'rb')
 u1 = np.fromfile(f1, dtype=np.double)
 
