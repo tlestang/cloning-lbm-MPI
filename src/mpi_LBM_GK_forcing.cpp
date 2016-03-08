@@ -242,16 +242,14 @@ int main()
 	  //cout << "Process " << my_rank << "t = " << t << "j = " << j << endl;
 	  
 	  //MPI_Barrier(MPI_COMM_WORLD);
-	  //generate_random_field(Dx, map, error);
+	  generate_random_field(Dx, map, error);
 	  // cout << "PROCESS " << my_rank << endl;
 	  // MPI_Barrier(MPI_COMM_WORLD);
 
 
 	  for(int tt=0;tt<lbmTimeSteps1;tt++)
 	    {
-	      //streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
-	      streamingAndCollisionComputeMacroBodyForce(&state[j*N], fout, rho, ux, uy, beta0, tau);
-	      if(t > 0 && my_rank==MASTER){cout << "I'm here t = " << tt << endl;}
+	      streamingAndCollisionComputeMacroBodyForceSpatial(&state[j*N], fout, rho, ux, uy, beta0, map, tau);
 	      computeDomainNoSlipWalls_BB(fout, &state[j*N]);
 	      computeSquareBounceBack_TEST(fout, &state[j*N]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
@@ -332,7 +330,6 @@ int main()
       //COMMUNICATIONS BETWEEN MASTER AND OTHER PROCESSES PRIOR TO CLONING STEP
       if(my_rank==MASTER)
 	{
-	  cout << "OK" << endl;
 	  total_R = R; //COMPUTE MASTER's CONTRIB. TO TOTAL AVERAGE WEIGHT TOTAL_R
 	  //GATHER WEIGHTS AND LOCAL AVERAGE WEIGHTS FROM OTHER PROCESSES
 	  for(int source=1;source<p;source++)
