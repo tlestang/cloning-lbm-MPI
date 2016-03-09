@@ -492,8 +492,8 @@ int main(int argc, char *argv[])
       	      if(my_rank == sender) //IF CLONES RESIDE IN PROC. my_rank
       		{
       		  //DO THE COPY
-      		  state[cte%local_Nc] = state[ctm%local_Nc];
-      		  //memcpy(&state[(cte%local_Nc)*N], &state[(ctm%local_Nc)*N], N*sizeof(double));
+      		  //state[cte%local_Nc] = state[ctm%local_Nc];
+      		  memcpy(state[cte%local_Nc], state[ctm%local_Nc], N*sizeof(double));
       		}
       	    }else{
       	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
