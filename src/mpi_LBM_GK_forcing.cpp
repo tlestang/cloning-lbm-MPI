@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
   double dT = 1.0;
   double dT0 = 1.0;
   double alpha = 1.0;
+  string path_to_folder, masterFolderName;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
@@ -57,8 +58,9 @@ int main(int argc, char *argv[])
   input_file >> tau;
   input_file >> beta0;
   input_file >> alpha;
+  input_file >> path_to_folder;
+  input_file >> masterFolderName;
   input_file.close();
-
 
   //------------------
 
@@ -102,6 +104,18 @@ int main(int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD,&p);
   local_Nc = Nc/p;
   cloneIdxMin = my_rank*local_Nc;
+
+  if(my_rank==MASTER)
+    {
+      cout << "READ input file" << endl;
+      cout << "---------------" << endl;
+      cout << "  Nc = " << Nc << endl;
+      cout << "  T = " << T << " dT = " << dT << " dT0 = " << dT0 << endl;
+      cout << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
+      cout << "  beta0 = " << beta0 << endl;
+      cout << " " << endl;
+      cout << "---------------------" << endl;
+    }
   //INIT SEED TO RANK SO THAT EACH PORC HAS ITS OWN RANDOM SEQUENCE
   srand(my_rank+1);
   //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
@@ -135,13 +149,13 @@ int main(int argc, char *argv[])
 
   //Set up variables and containers for output
   string folderName[local_Nc], instru;
-  string masterFolderName = "output_test/";
   stringstream weightsFileName, copiesFileName, buf;
   ofstream weightsFile, copiesFile;
 #ifdef FORCE_IO
   ofstream output_file;
 #endif
   instru = "mkdir " + masterFolderName;
+  if(my_rank==MASTER){cout << "Created parent folder " << masterFolderName.c_str() << endl;}
   if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
   for(int i=0;i<local_Nc;i++)
@@ -155,18 +169,23 @@ int main(int argc, char *argv[])
     }
 
   ifstream popFile;
-  string path_to_file, path_to_folder, fileName;
+  string path_to_file, fileName;
 
-  path_to_file = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/popfiles_list.dat";
-  path_to_folder = "/home/thibault/lbm_code/seq/L32_run_for_pops_file/populations/";
+  path_to_file = path_to_folder+"popfiles_list.dat";
   ifstream fileList;
   char* buffer;
   if(my_rank==MASTER)
     {
       fileList.open(path_to_file.c_str());
+      if(fileList.is_open())
+	{
+	  cout << "Index file " << path_to_file.c_str() << " successfully opened" << endl;
+	  cout << "-------------" << endl;
+	}
       for(int j=local_Nc;j<Nc;j++)
   	{
   	  fileList >> fileName;
+	  cout << "    Copy " << j << " init. on " << fileName.c_str() << endl;
   	  tag = j;
   	  dest = j/local_Nc;
   	  //BEWARE : MUST SEND STRING.LENGTH()+1 CHARACTERS BECAUSE OF THE FINAL \0 !
@@ -176,6 +195,7 @@ int main(int argc, char *argv[])
       for(int j=0;j<local_Nc;j++)
   	{
   	  fileList >> fileName;
+	  cout << "    Copy " << j << " init. on " << fileName.c_str() << endl;
   	  instru = path_to_folder + fileName;
   	  popFile.open(instru.c_str(), ios::binary);
   	  popFile.read((char*)&state[j][0], N*sizeof(double));
@@ -198,23 +218,7 @@ int main(int argc, char *argv[])
       delete[] buffer;
     }
   MPI_Barrier(MPI_COMM_WORLD);
-  // string fileName;
-  // if(my_rank==MASTER)
-  //   {
-  //     crFileID.open(path_to_control_run.c_str(), ios::binary);
-  //     for(int j=0;j<local_Nc;j++)
-  // 	{
-  // 	  crFileID.seekg(0, std::ios::beg); //Set cursor to beginning of file
-  // 	  crFileID.read((char*)&state[j][0], N*sizeof(double));
-  // 	}
-  //     crFileID.close();
-  //   }
-
-  // //BROADCAST OF INITIAL POPULATIONS FROM MASTER TO OTHER PROCESSES
-  // for(int j=0;j<local_Nc;j++)
-  //   {
-  //     MPI_Bcast(&state[j][0], N, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-  //   }
+  if(my_rank==MASTER){cout << "Looking good, about to enter timestep loop : " << endl;}
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
@@ -230,6 +234,8 @@ int main(int argc, char *argv[])
 	  weightsFile.open(instru.c_str(), ios::binary);
 	  instru = masterFolderName + copiesFileName.str();
 	  copiesFile.open(instru.c_str(), ios::binary);
+	  cout << "    This is cloning step " << t << endl;
+	  cout << "    Created files " << weightsFileName.str().c_str() << " and " << copiesFileName.str().c_str() << " in " << masterFolderName.c_str() << endl;
 	  weightsFileName.str(string());
 	  weightsFileName.clear();
 	  copiesFileName.str(string());
