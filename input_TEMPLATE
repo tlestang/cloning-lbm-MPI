@@ -1,4 +1,9 @@
-size_of_the_square
-relaxation_parameter_tau
-Mach_number_Ma
-caracteristic time in nb of timesteps
+nb of clones
+total time
+cloning timestep
+duration of perturbation
+size of square
+tau
+forcing intensity
+alpha
+

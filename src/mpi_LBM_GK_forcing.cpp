@@ -37,29 +37,32 @@ int main(int argc, char *argv[])
 {
   
   // --- PARAMETERS FOR TLGK ALGO. ---
-  int Nc = 16; // Number of clones
-  double T = 4; // Total simulation time
-  double dT = 2; // Cloning timestep
-  double dT0 = 2.0/10.0;
-  double F0 = 0.00152554533819;
+  int Nc = 0;
+  double T = 1.0;
+  double dT = 1.0;
+  double dT0 = 1.0;
+  double alpha = 1.0;
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
-  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0;
+  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0, beta0=1.0;
   int Lx = 0, Ly = 0;
   //READ INPUT FILE
   ifstream input_file("input_LBM.datin");
+  input_file >> Nc;
+  input_file >> T;
+  input_file >> dT;
+  input_file >> dT0;
   input_file >> Lx; Ly = Lx;
   input_file >> tau;
-  input_file >> Ma;
-  input_file >> t0; //t0 IS THE TURN AROUND TIME (GIVEN IN LBM TIMESTEP)
+  input_file >> beta0;
+  input_file >> alpha;
   input_file.close();
+
 
   //------------------
 
   //VARIABLES FOR TLGK
-  double phi_alpha, phi_theor;
-  double alpha=2.8, alphaMin = -0.5, alphaIncr = 0.025, alphaMax = 0.5;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
@@ -79,14 +82,20 @@ int main(int argc, char *argv[])
   double cs = 1./sqrt(3); double rho0 = 1.0;
   double nu = 1./3.*(tau-0.5);
   double u0 = cs*cs*Ma; double uxSum, uxMean;
-  double beta0 = 8*nu*u0/((Dy-1)/2)/((Dy-1)/2); double a=1.0;
+  double a=1.0;
   double omega = 1.0/tau;
-  double F;
-  double delta_t = 1.0/t0;
-  int error;
-  int lbmTimeSteps1 = floor(dT0/delta_t);
-  int lbmTimeSteps2 = floor((dT-dT0)/delta_t);
+  double F, U0, T0, F0;
+
+    //COMPUTE CHARESTICTC VELOCITY AND TIME
+  U0 = sqrt(beta0*((Dy-1)/(Lx-1))*(Dx-1));
+  T0 = (Lx-1)/U0;
+  F0 = (U0*U0)*(Lx-1)*0.5;
    
+  double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
+  int error;
+  int lbmTimeSteps1 = floor(dT0*T0);
+  int lbmTimeSteps2 = floor((dT-dT0)*T0);
+
   MPI_Init(&argc, &argv);
   //MPI_Init(NULL, NULL);
   MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
@@ -276,7 +285,7 @@ int main(int argc, char *argv[])
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F/F0 - 1.0;
+	      s_ += F/F0;
 	    } //END LOOP ON TIMESTEPS
 	  
 	  for(int tt=0;tt<lbmTimeSteps2;tt++)
@@ -306,7 +315,7 @@ int main(int argc, char *argv[])
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F/F0 - 1.0;
+	      s_ += F/F0;
 	    } //END LOOP ON TIMESTEPS
 #ifdef FORCE_IO
 	  output_file.close();
