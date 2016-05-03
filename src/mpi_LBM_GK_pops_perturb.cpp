@@ -40,8 +40,9 @@ int main(int argc, char *argv[])
   int Nc = 0;
   double T = 1.0;
   double dT = 1.0;
-  double dT0 = 1.0;
+  double eps = 1.0;
   double alpha = 1.0;
+  int NN = 10;
   string path_to_folder, masterFolderName;
   //------------------------
 
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
   input_file >> Nc;
   input_file >> T;
   input_file >> dT;
-  input_file >> dT0;
+  input_file >> eps;
   input_file >> Lx; Ly = Lx;
   input_file >> tau;
   input_file >> beta0;
@@ -95,8 +96,7 @@ int main(int argc, char *argv[])
    
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
   int error;
-  int lbmTimeSteps1 = floor(dT0*T0);
-  int lbmTimeSteps2 = floor((dT-dT0)*T0);
+  int lbmTimeSteps2 = floor(dT*T0);
 
   MPI_Init(&argc, &argv);
   //MPI_Init(NULL, NULL);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
       cout << "READ input file" << endl;
       cout << "---------------" << endl;
       cout << "  Nc = " << Nc << endl;
-      cout << "  T = " << T << " dT = " << dT << " dT0 = " << dT0 << endl;
+      cout << "  T = " << T << " dT = " << dT << endl;
       cout << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
       cout << "  beta0 = " << beta0 << endl;
       cout << " " << endl;
@@ -128,10 +128,14 @@ int main(int argc, char *argv[])
       // ONE POP ARRAY PER CLONE
       state[j] = (double *) memalign(getpagesize(), N*sizeof(double)); 
     }
-  //double *state;
-  
-  //state = (double *) memalign(getpagesize(), local_Nc*N*sizeof(double));
-  //state = new double[local_Nc*N*sizeof(double)];
+  //Allocate memory for perturbation
+  double **popsForPerturb;
+  popsForPerturb = new double*[local_Nc];
+  for(int i=0;i<NN;i++)
+    {
+      popsForPerturb[i] = (double *) memalign(getpagesize(), N*sizeof(double));
+    }
+
   fout = (double *) memalign(getpagesize(), N*sizeof(double));
   rho = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
   ux = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
@@ -170,6 +174,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+  // INITIALIZATION PROCEDURE ------------------------------------------------------------------------
   ifstream popFile;
   string path_to_file, fileName;
 
@@ -220,6 +225,43 @@ int main(int argc, char *argv[])
       delete[] buffer;
     }
   MPI_Barrier(MPI_COMM_WORLD);
+
+  // END OF INITIALIZATION PROCEDURE ----------------------------------------------------------------------------------
+
+  path_to_file = path_to_folder+"popfiles_list.dat";
+  fileList.open(path_to_file.c_str());
+  error = 1;
+  for (int nn=0; nn<NN;nn++)
+    {
+      fileList >> fileName;
+      path_to_file = path_to_folder + fileName;
+      popFile.open(path_to_file.c_str(), ios::binary);
+      if(popFile.is_open())
+	{
+	  popFile.read((char*)&popsForPerturb[nn][0], N*sizeof(double));
+	}
+      else
+	{
+	  error = 0;
+	}
+    }
+
+  if(my_rank==MASTER)
+    {
+      if(error){cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN MASTER" << endl;}
+      for (int source=1;source<p;source++)
+	{
+	  tag = source;
+	  MPI_Recv(&error, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
+	  if(error){cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN PROC " << source << endl;}
+	}
+    }
+  else
+    {
+      MPI_Send(&error, 1, MPI_INT, MASTER, my_rank, MPI_COMM_WORLD);
+    }
+  
+  
   if(my_rank==MASTER){cout << "Looking good, about to enter timestep loop : " << endl;}
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
@@ -258,44 +300,13 @@ int main(int argc, char *argv[])
 	  output_file.open(fileName.c_str(), ios::binary);
 #endif
 
-	  //cout << "Process " << my_rank << "t = " << t << "j = " << j << endl;
-	  
-	  //MPI_Barrier(MPI_COMM_WORLD);
-	  generate_random_field(Dx, map, error);
-	  // cout << "PROCESS " << my_rank << endl;
-	  // MPI_Barrier(MPI_COMM_WORLD);
+	  // PERTURBATION OF THE CLONE -------------------------------------------------------------
+
+	  error = generatePerturbedState(state[j], popsForPerturb, eps, NN, N);
+
+	  // END OF PERTURBATION OF THE CLONE ------------------------------------------------------
 
 
-	  for(int tt=0;tt<lbmTimeSteps1;tt++)
-	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
-	      computeDomainNoSlipWalls_BB(fout, state[j]);
-	      computeSquareBounceBack_TEST(fout, state[j]);
-	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
-	      for(int x=xmin+1;x<xmax;x++)
-		{
-		  for(int y=ymin+1;y<ymax;y++)
-		    {
-		      for(int k=0;k<9;k++)
-			{
-			  fout[IDX(x,y,k)] = w[k];
-			}
-		    }
-		}
-	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      pivot = state[j];
-	      state[j] = fout;
-	      fout = pivot;
-	      //	      memcpy(state[j], fout, N*sizeof(double));
-	      // COMPUTE FORCE ON SQUARE
-	      F = computeForceOnSquare(state[j], omega);
-#ifdef FORCE_IO
-	      output_file.write((char*)&F, sizeof(double));
-#endif
-	      // COMPUTE WEIGHT
-	      s_ += F/F0;
-	    } //END LOOP ON TIMESTEPS
-	  
 	  for(int tt=0;tt<lbmTimeSteps2;tt++)
 	    {
 	      streamingAndCollisionComputeMacroBodyForce(state[j], fout, rho, ux, uy, beta0, tau);

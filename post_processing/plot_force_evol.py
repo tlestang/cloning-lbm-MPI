@@ -5,36 +5,17 @@ import matplotlib.pyplot as plt
 L = 32
 nu = (1.0/3)*(0.502-0.5)
 
-filename = '../output_test/clone_2/evolution_0_clone_2'
-f1 = open(filename, 'rb')
-u = np.fromfile(f1, dtype=np.double)
+for i in range(0,128):
+    print i
+    filename = '/home/tlestang/tailleur_lecomte_MPI/output_11_03/clone_'+str(i)+'/evolution_1_clone_'+str(i)
+    f1 = open(filename, 'rb')
+    u = np.fromfile(f1, dtype=np.double)
+    N = np.size(u);
+    t0 = 17950.0;
+    dt = 1.0/t0;
+    tMax = N*dt;
+    tDomain = np.linspace(0,tMax, N);
+    plot(tDomain, u)
 
-filename = '../output_test/clone_2/evolution_1_clone_2'
-f1 = open(filename, 'rb')
-u1 = np.fromfile(f1, dtype=np.double)
-
-# filename = '../output/clone_2/evolution_0_clone_2'
-# f1 = open(filename, 'rb')
-# u2 = np.fromfile(f1, dtype=np.double)
-
-# filename = '../output/clone_3/evolution_0_clone_3'
-# f1 = open(filename, 'rb')
-# u3 = np.fromfile(f1, dtype=np.double)
-
-# filename = 'CLONE_2'
-# f1 = open(filename, 'rb')
-# u2 = np.fromfile(f1, dtype=np.double)
-print u
-
-N = np.size(u);
-t0 = 5857.0;
-dt = 1.0/t0;
-tMax = N*dt;
-tDomain = np.linspace(0,tMax, N);
-
-plt.plot(tDomain, u)
-plt.plot(tDomain, u1)
-# plt.plot(tDomain, u2)
-# plt.plot(tDomain, u3)
 plt.show()
 # plt.savefig('corr_32_zoom.png')

@@ -4,8 +4,11 @@ LPFLAGS=-lfftw3 -lm
 all: main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o
 	mpic++ -o TLGK_LBM main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o $(LPFLAGS)
 
-forcing: main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o
-	mpic++ -o TLGK_LBM_FORCING main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o $(LPFLAGS)
+forcing: main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o covariance_fctn.o randNormal.o 
+	mpic++ -o TLGK_LBM_FORCING main_forcing.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o covariance_fctn.o randNormal.o $(LPFLAGS)
+
+popsPerturb: main_popsPerturb.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o covariance_fctn.o randNormal.o generatePerturbedState.o
+	mpic++ -o TLGK_LBM_POPS_PERTURB main_popsPerturb.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o covariance_fctn.o randNormal.o generatePerturbedState.o $(LPFLAGS)
 
 # --- MAIN FUNCTIONS --- #
 
@@ -13,6 +16,8 @@ main.o: src/mpi_LBM_GK.cpp
 	mpic++ -o main.o -c src/mpi_LBM_GK.cpp $(CXXFLAGS)
 main_forcing.o: src/mpi_LBM_GK_forcing.cpp
 	mpic++ -o main_forcing.o -c src/mpi_LBM_GK_forcing.cpp $(CXXFLAGS)
+main_popsPerturb.o: src/mpi_LBM_GK_pops_perturb.cpp
+	mpic++ -o main_popsPerturb.o -c src/mpi_LBM_GK_pops_perturb.cpp $(CXXFLAGS)
 
 # --- LBM FUNCTIONS --- #
 
@@ -46,11 +51,13 @@ randNormal.o: src/perturbation_routines/randNormal.cpp
 	g++ -o randNormal.o -c src/perturbation_routines/randNormal.cpp
 generate_mask.o: src/perturbation_routines/generate_mask.cpp
 	g++ -o generate_mask.o -c src/perturbation_routines/generate_mask.cpp
+generatePerturbedState.o: src/perturbation_routines/generatePerturbedState.cpp
+	g++ -o generatePerturbedState.o -c src/perturbation_routines/generatePerturbedState.cpp
 
 # --- CLEANING --- #
 clean:
 	rm -rf *.o
 mrproper: clean
-	rm -rf all; rm -rf forcing;
+	rm -rf all; rm -rf forcing; rm -rf popsPerturb;
 
 
