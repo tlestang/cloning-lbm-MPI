@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
-  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0, beta0=1.0;
+  double tau = 1.0, beta = 1.0, t0 = 1.0, beta0=1.0, U0=1.0;
   int Lx = 0, Ly = 0;
   //READ INPUT FILE
   ifstream input_file("input_LBM.datin");
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
   input_file >> eps;
   input_file >> Lx; Ly = Lx;
   input_file >> tau;
-  input_file >> beta0;
+  input_file >> U0;
   input_file >> alpha;
   input_file >> path_to_folder;
   input_file >> masterFolderName;
@@ -84,16 +84,16 @@ int main(int argc, char *argv[])
   int N = Dx*Dy*9;
   double cs = 1./sqrt(3); double rho0 = 1.0;
   double nu = 1./3.*(tau-0.5);
-  double u0 = cs*cs*Ma; double uxSum, uxMean;
+  double uxSum, uxMean;
   double a=1.0;
   double omega = 1.0/tau;
-  double F, U0, T0, F0;
+  double F, T0, F0, oneOvF0;
 
     //COMPUTE CHARESTICTC VELOCITY AND TIME
-  U0 = sqrt(beta0*((Dy-1)/(Lx-1))*(Dx-1));
+  beta0 = (1./(Dx-1))*((double)Lx/(Dy-1))*U0*U0;
   T0 = (Lx-1)/U0;
   F0 = (U0*U0)*(Lx-1)*0.5;
-   
+  oneOvF0 = 1./F0;   
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
   int error;
   int lbmTimeSteps2 = floor(dT*T0);
@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F/F0;
+	      s_ += F*oneOvF0;
 	    } //END LOOP ON TIMESTEPS
 #ifdef FORCE_IO
 	  output_file.close();
