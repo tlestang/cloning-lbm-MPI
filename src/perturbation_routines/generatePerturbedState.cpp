@@ -31,4 +31,5 @@ int generatePerturbedState(double *fin, double **popsForPerturb, double eps, int
     {
       fin[i] += eps*fprim[i]*oneOvNorm*oneOvA;
     }
+  delete[] fprim;
 }

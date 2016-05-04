@@ -65,6 +65,8 @@ int main(int argc, char *argv[])
 
   //------------------
 
+  ofstream ascii_output;
+  
   //VARIABLES FOR TLGK
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
@@ -107,14 +109,24 @@ int main(int argc, char *argv[])
 
   if(my_rank==MASTER)
     {
+      ascii_output.open("output_TLGK.out");
       cout << "READ input file" << endl;
       cout << "---------------" << endl;
       cout << "  Nc = " << Nc << endl;
       cout << "  T = " << T << " dT = " << dT << endl;
       cout << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
       cout << "  beta0 = " << beta0 << endl;
-      cout << " " << endl;
       cout << "---------------------" << endl;
+      cout << "---------------------" << endl;
+
+      ascii_output << "READ input file" << endl;
+      ascii_output << "---------------" << endl;
+      ascii_output << "  Nc = " << Nc << endl;
+      ascii_output << "  T = " << T << " dT = " << dT << endl;
+      ascii_output << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
+      ascii_output << "  beta0 = " << beta0 << endl;
+      ascii_output << "---------------------" << endl;
+      ascii_output << "---------------------" << endl;
     }
   //INIT SEED TO RANK SO THAT EACH PORC HAS ITS OWN RANDOM SEQUENCE
   srand(my_rank+1);
@@ -130,7 +142,7 @@ int main(int argc, char *argv[])
     }
   //Allocate memory for perturbation
   double **popsForPerturb;
-  popsForPerturb = new double*[local_Nc];
+  popsForPerturb = new double*[NN];
   for(int i=0;i<NN;i++)
     {
       popsForPerturb[i] = (double *) memalign(getpagesize(), N*sizeof(double));
@@ -159,7 +171,11 @@ int main(int argc, char *argv[])
   ofstream output_file;
 #endif
   instru = "mkdir " + masterFolderName;
-  if(my_rank==MASTER){cout << "Created parent folder " << masterFolderName.c_str() << endl;}
+  if(my_rank==MASTER)
+    {
+      cout << "Created parent folder " << masterFolderName.c_str() << endl;
+      ascii_output << "Created parent folder " << masterFolderName.c_str() << endl;
+    }
   if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
 #ifdef FORCE_IO
@@ -188,11 +204,19 @@ int main(int argc, char *argv[])
 	{
 	  cout << "Index file " << path_to_file.c_str() << " successfully opened" << endl;
 	  cout << "-------------" << endl;
+	  ascii_output << "Index file " << path_to_file.c_str() << " successfully opened" << endl;
+	  ascii_output << "-------------" << endl;
+	}
+      else
+	{
+	  cout << "ERROR : COULD NOT OPEN INDEX FILE " << path_to_file << endl;
+	  ascii_output << "ERROR : COULD NOT OPEN INDEX FILE " << path_to_file << endl;
 	}
       for(int j=local_Nc;j<Nc;j++)
   	{
   	  fileList >> fileName;
 	  cout << "    Copy " << j << " init. on " << fileName.c_str() << endl;
+	  ascii_output << "    Copy " << j << " init. on " << fileName.c_str() << endl;
   	  tag = j;
   	  dest = j/local_Nc;
   	  //BEWARE : MUST SEND STRING.LENGTH()+1 CHARACTERS BECAUSE OF THE FINAL \0 !
@@ -203,6 +227,7 @@ int main(int argc, char *argv[])
   	{
   	  fileList >> fileName;
 	  cout << "    Copy " << j << " init. on " << fileName.c_str() << endl;
+	  ascii_output << "    Copy " << j << " init. on " << fileName.c_str() << endl;
   	  instru = path_to_folder + fileName;
   	  popFile.open(instru.c_str(), ios::binary);
   	  popFile.read((char*)&state[j][0], N*sizeof(double));
@@ -225,11 +250,44 @@ int main(int argc, char *argv[])
       delete[] buffer;
     }
   MPI_Barrier(MPI_COMM_WORLD);
+  if(my_rank==MASTER)
+    {
+      cout << "--------------------- " << endl;
+      cout << "--------------------- " << endl;
+      ascii_output << "--------------------- " << endl;
+      ascii_output << "--------------------- " << endl;
+    }
 
   // END OF INITIALIZATION PROCEDURE ----------------------------------------------------------------------------------
 
+  //READS NN POPULATIONS FILES FOR PERTURBATION-----------------------------------------------------------------------
+  //FINDS THEIR NAMES IN INDEX FILE
   path_to_file = path_to_folder+"popfiles_list.dat";
   fileList.open(path_to_file.c_str());
+  if(fileList.is_open()){error=0;}
+  else{error=1;}
+
+    if(my_rank==MASTER)
+    {
+      if(error){
+	cout << "COULD NOT OPEN INDEX FILE IN MASTER" << endl;
+	ascii_output << "COULD NOT OPEN INDEX FILE IN MASTER" << endl;
+      }
+      for (int source=1;source<p;source++)
+	{
+	  tag = source;
+	  MPI_Recv(&error, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
+	  if(error){
+	    cout << "COULD NOT OPEN INDEX FILE IN PROC " << source << endl;
+	    ascii_output << "COULD NOT OPEN INDEX FILE IN PROC " << source << endl;
+	  }
+	}
+    }
+  else
+    {
+      MPI_Send(&error, 1, MPI_INT, MASTER, my_rank, MPI_COMM_WORLD);
+    }
+    
   error = 0;
   for (int nn=0; nn<NN;nn++)
     {
@@ -249,12 +307,17 @@ int main(int argc, char *argv[])
 
   if(my_rank==MASTER)
     {
-      if(error){cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN MASTER" << endl;}
+      if(error){cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN MASTER" << endl;
+	ascii_output << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN MASTER" << endl;
+      }
       for (int source=1;source<p;source++)
 	{
 	  tag = source;
 	  MPI_Recv(&error, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
-	  if(error){cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN PROC " << source << endl;}
+	  if(error){
+	    cout << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN PROC " << source << endl;
+	    ascii_output << "ERROR WITH READING OF POPULATIONS FOR PERTURB IN PROC " << source << endl;
+	  }
 	}
     }
   else
@@ -263,7 +326,10 @@ int main(int argc, char *argv[])
     }
   
   
-  if(my_rank==MASTER){cout << "Looking good, about to enter timestep loop : " << endl;}
+  if(my_rank==MASTER){
+    cout << "Looking good, about to enter timestep loop : " << endl;
+    ascii_output << "Looking good, about to enter timestep loop : " << endl;
+  }
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
@@ -281,6 +347,9 @@ int main(int argc, char *argv[])
 	  copiesFile.open(instru.c_str(), ios::binary);
 	  cout << "    This is cloning step " << t << endl;
 	  cout << "    Created files " << weightsFileName.str().c_str() << " and " << copiesFileName.str().c_str() << " in " << masterFolderName.c_str() << endl;
+	  ascii_output << "    This is cloning step " << t << endl;
+	  ascii_output << "    Created files " << weightsFileName.str().c_str() << " and " << copiesFileName.str().c_str() << " in " << masterFolderName.c_str() << endl;
+	  
 	  weightsFileName.str(string());
 	  weightsFileName.clear();
 	  copiesFileName.str(string());
@@ -325,17 +394,17 @@ int main(int argc, char *argv[])
 		    }
 		}
 	      //SWAP POINTERS ON POPULATIONS FOR NEXT ITERATION OF LBM
-	      //memcpy(state[j], fout, N*sizeof(double));
 	      pivot = state[j];
 	      state[j] = fout;
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
+	      F = F*oneOvF0;
 #ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F*oneOvF0;
+	      s_ += F;
 	    } //END LOOP ON TIMESTEPS
 #ifdef FORCE_IO
 	  output_file.close();
@@ -553,6 +622,8 @@ int main(int argc, char *argv[])
       // // MPI_Barrier(MPI_COMM_WORLD);
       
     } //TIMESTEPS
+
+  
   if(my_rank==MASTER)
     {
       instru = masterFolderName + "rvalues.dat";
@@ -560,8 +631,26 @@ int main(int argc, char *argv[])
       ofstream rvalues(instru.c_str(), ios::binary);
       rvalues.write((char*)&R_record[0], nbrTimeSteps*sizeof(double));
       rvalues.close();
+      ascii_output.close();
     }
+
+  // FREE MEMORY -------------------------
+  for(int j=0;j<local_Nc;j++)
+    {
+      delete[] state[j];
+    }
+    for(int i=0;i<NN;i++)
+    {
+      delete[] popsForPerturb[i];
+    }
+  delete[] state;
+  delete[] popsForPerturb;
+
+  // --------------------------------------
+  
   MPI_Finalize();
+
+
 } // MAIN()
 	  
 
