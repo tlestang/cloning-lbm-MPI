@@ -35,6 +35,8 @@ int Dx, Dy, xmin, xmax, ymin, ymax;
 int main(int argc, char *argv[])
 //int main()
 {
+  int error;
+  ofstream ascii_output;
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 0;
@@ -49,30 +51,73 @@ int main(int argc, char *argv[])
   // --- PARAMETERS FOR LBM ---
   double tau = 1.0, beta = 1.0, t0 = 1.0, beta0=1.0, U0=1.0;
   int Lx = 0, Ly = 0;
+
+  //MPI_ INIT
+  int my_rank, p, tag=0;
+  MPI_Status status;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD,&p);
+
+  //---------------------------------------------------------------------------------------
+  
   //READ INPUT FILE
-  ifstream input_file("input_LBM.datin");
-  input_file >> Nc;
-  input_file >> T;
-  input_file >> dT;
-  input_file >> eps;
-  input_file >> Lx; Ly = Lx;
-  input_file >> tau;
-  input_file >> U0;
-  input_file >> alpha;
-  input_file >> path_to_folder;
-  input_file >> masterFolderName;
+  ifstream input_file(argv[1]);
+  if(input_file.is_open())
+    {
+      error = 0;
+      input_file >> Nc;
+      input_file >> T;
+      input_file >> dT;
+      input_file >> eps;
+      input_file >> Lx; Ly = Lx;
+      input_file >> tau;
+      input_file >> U0;
+      input_file >> alpha;
+      input_file >> path_to_folder;
+      input_file >> masterFolderName;
+    }
+  else{error=1;}
+
   input_file.close();
 
+  if(my_rank==MASTER)
+    {
+      ascii_output.open("output_TLGK.out");
+      if(error){
+	cout << "COULD NOT OPEN INPUT FILE IN MASTER" << endl;
+	ascii_output << "COULD NOT OPEN INPUT FILE IN MASTER" << endl;
+      }
+      for (int source=1;source<p;source++)
+	{
+	  tag = source;
+	  MPI_Recv(&error, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
+	  if(error){
+	    cout << "COULD NOT OPEN INPUT FILE IN PROC " << source << endl;
+	    ascii_output << "COULD NOT OPEN INPUT FILE IN PROC " << source << endl;
+	  }
+	}
+    }
+  else
+    {
+      MPI_Send(&error, 1, MPI_INT, MASTER, my_rank, MPI_COMM_WORLD);
+    }
+  MPI_Barrier(MPI_COMM_WORLD);
+  if(my_rank==MASTER)
+    {
+      cout << "All processes sucessfully read input file " << argv[1] << endl;
+    }
   //------------------
 
-  ofstream ascii_output;
-  
   //VARIABLES FOR TLGK
+  int local_Nc, cloneIdxMin, cloneIdx;
+  local_Nc = Nc/p;
+  cloneIdxMin = my_rank*local_Nc;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
 
-  int my_rank, p, local_Nc, cloneIdx, cloneIdxMin, tag = 0;
+  
   int ctm, cte, nbComm;
   int sender, dest;
   bool flag;
@@ -97,19 +142,14 @@ int main(int argc, char *argv[])
   F0 = (U0*U0)*(Lx-1)*0.5;
   oneOvF0 = 1./F0;   
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
-  int error;
+
   int lbmTimeSteps2 = floor(dT*T0);
 
-  MPI_Init(&argc, &argv);
-  //MPI_Init(NULL, NULL);
-  MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
-  MPI_Comm_size(MPI_COMM_WORLD,&p);
-  local_Nc = Nc/p;
-  cloneIdxMin = my_rank*local_Nc;
+
 
   if(my_rank==MASTER)
     {
-      ascii_output.open("output_TLGK.out");
+
       cout << "READ input file" << endl;
       cout << "---------------" << endl;
       cout << "  Nc = " << Nc << endl;
@@ -128,6 +168,7 @@ int main(int argc, char *argv[])
       ascii_output << "---------------------" << endl;
       ascii_output << "---------------------" << endl;
     }
+  
   //INIT SEED TO RANK SO THAT EACH PORC HAS ITS OWN RANDOM SEQUENCE
   srand(my_rank+1);
   //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
@@ -161,7 +202,7 @@ int main(int argc, char *argv[])
   int nbCreatedCopies[Nc];
   double R_record[nbrTimeSteps]; double R, total_R;
 
-  MPI_Status status;
+
 
   //Set up variables and containers for output
   string folderName[local_Nc], instru;
