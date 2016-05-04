@@ -6,7 +6,7 @@ int generatePerturbedState(double *fin, double **popsForPerturb, double eps, int
 {
   double *fprim; double norm, randomPrefactor;
   double oneOvNorm, oneOvA, a;
-  int error = 1;
+  int error = 0;
   fprim = new double[N];
   double sum_prefactors = 0.0;
   for (int nn=0;nn<NN;nn++)

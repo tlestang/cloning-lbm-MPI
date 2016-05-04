@@ -1,10 +1,10 @@
 nb of clones
 total time
 cloning timestep
-duration of perturbation
+amplitude of perturbation
 size of square
 tau
-forcing intensity
+typical velocity of mean flow
 alpha
 path_to_folder (with / at the end !!!!)
 parent folder name (with / at the end !!!!)

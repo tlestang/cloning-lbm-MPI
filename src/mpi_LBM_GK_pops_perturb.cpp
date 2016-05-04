@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 
   path_to_file = path_to_folder+"popfiles_list.dat";
   fileList.open(path_to_file.c_str());
-  error = 1;
+  error = 0;
   for (int nn=0; nn<NN;nn++)
     {
       fileList >> fileName;
@@ -242,8 +242,9 @@ int main(int argc, char *argv[])
 	}
       else
 	{
-	  error = 0;
+	  error = 1;
 	}
+      popFile.close();
     }
 
   if(my_rank==MASTER)
