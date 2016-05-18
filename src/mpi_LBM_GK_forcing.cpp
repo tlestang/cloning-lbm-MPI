@@ -35,6 +35,8 @@ int Dx, Dy, xmin, xmax, ymin, ymax;
 int main(int argc, char *argv[])
 //int main()
 {
+  int error;
+  ofstream ascii_output;
   
   // --- PARAMETERS FOR TLGK ALGO. ---
   int Nc = 0;
@@ -46,22 +48,63 @@ int main(int argc, char *argv[])
   //------------------------
 
   // --- PARAMETERS FOR LBM ---
-  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0, beta0=1.0;
+  double tau = 1.0, beta = 1.0, Ma = 1.0, t0 = 1.0, U0=1.0, eps=1.0;
   int Lx = 0, Ly = 0;
+  
+  //MPI_INIT
+  int my_rank, p, tag=0;
+  MPI_Status status;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD,&p);
+  
   //READ INPUT FILE
-  ifstream input_file("input_LBM.datin");
-  input_file >> Nc;
-  input_file >> T;
-  input_file >> dT;
-  input_file >> dT0;
-  input_file >> Lx; Ly = Lx;
-  input_file >> tau;
-  input_file >> beta0;
-  input_file >> alpha;
-  input_file >> path_to_folder;
-  input_file >> masterFolderName;
+  ifstream input_file(argv[1]);
+  if(input_file.is_open())
+    {
+      input_file >> Nc;
+      input_file >> T;
+      input_file >> dT;
+      input_file >> dT0;
+      input_file >> eps;
+      input_file >> Lx; Ly = Lx;
+      input_file >> tau;
+      input_file >> U0;
+      input_file >> alpha;
+      input_file >> path_to_folder;
+      input_file >> masterFolderName;
+      input_file.close();
+    }
+  else{error=1;}
+
   input_file.close();
 
+    if(my_rank==MASTER)
+    {
+      ascii_output.open("output_TLGK.out");
+      if(error){
+	cout << "COULD NOT OPEN INPUT FILE IN MASTER" << endl;
+	ascii_output << "COULD NOT OPEN INPUT FILE IN MASTER" << endl;
+      }
+      for (int source=1;source<p;source++)
+	{
+	  tag = source;
+	  MPI_Recv(&error, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
+	  if(error){
+	    cout << "COULD NOT OPEN INPUT FILE IN PROC " << source << endl;
+	    ascii_output << "COULD NOT OPEN INPUT FILE IN PROC " << source << endl;
+	  }
+	}
+    }
+  else
+    {
+      MPI_Send(&error, 1, MPI_INT, MASTER, my_rank, MPI_COMM_WORLD);
+    }
+  MPI_Barrier(MPI_COMM_WORLD);
+  if(my_rank==MASTER)
+    {
+      cout << "All processes sucessfully read input file " << argv[1] << endl;
+    }
   //------------------
 
   //VARIABLES FOR TLGK
@@ -69,7 +112,9 @@ int main(int argc, char *argv[])
   int nbrTimeSteps = floor(T/dT);
   int l= 0; int idx;
 
-  int my_rank, p, local_Nc, cloneIdx, cloneIdxMin, tag = 0;
+  int local_Nc, cloneIdx, cloneIdxMin;
+  local_Nc = Nc/p;
+  cloneIdxMin = my_rank*local_Nc;
   int ctm, cte, nbComm;
   int sender, dest;
   bool flag;
@@ -86,36 +131,40 @@ int main(int argc, char *argv[])
   double u0 = cs*cs*Ma; double uxSum, uxMean;
   double a=1.0;
   double omega = 1.0/tau;
-  double F, U0, T0, F0;
+  double F, beta0, T0, F0, oneOvF0;
 
     //COMPUTE CHARESTICTC VELOCITY AND TIME
-  U0 = sqrt(beta0*((Dy-1)/(Lx-1))*(Dx-1));
+  beta0 = (1./(Dx-1))*((double)Lx/(Dy-1))*U0*U0;
   T0 = (Lx-1)/U0;
   F0 = (U0*U0)*(Lx-1)*0.5;
+  oneOvF0 = 1./F0;   
    
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
-  int error;
   int lbmTimeSteps1 = floor(dT0*T0);
   int lbmTimeSteps2 = floor((dT-dT0)*T0);
 
-  MPI_Init(&argc, &argv);
-  //MPI_Init(NULL, NULL);
-  MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
-  MPI_Comm_size(MPI_COMM_WORLD,&p);
-  local_Nc = Nc/p;
-  cloneIdxMin = my_rank*local_Nc;
-
   if(my_rank==MASTER)
     {
+
       cout << "READ input file" << endl;
       cout << "---------------" << endl;
       cout << "  Nc = " << Nc << endl;
-      cout << "  T = " << T << " dT = " << dT << " dT0 = " << dT0 << endl;
+      cout << "  T = " << T << " dT = " << dT << endl;
       cout << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
       cout << "  beta0 = " << beta0 << endl;
-      cout << " " << endl;
       cout << "---------------------" << endl;
+      cout << "---------------------" << endl;
+
+      ascii_output << "READ input file" << endl;
+      ascii_output << "---------------" << endl;
+      ascii_output << "  Nc = " << Nc << endl;
+      ascii_output << "  T = " << T << " dT = " << dT << endl;
+      ascii_output << "  L = " << Lx << " Dx = " << Dx << " Dy = " << Dy << endl;
+      ascii_output << "  beta0 = " << beta0 << endl;
+      ascii_output << "---------------------" << endl;
+      ascii_output << "---------------------" << endl;
     }
+
   //INIT SEED TO RANK SO THAT EACH PORC HAS ITS OWN RANDOM SEQUENCE
   srand(my_rank+1);
   //EQUILIBRATE RANDOM GENRATOR (TO BE PROVEN RELEVANT)
@@ -145,9 +194,7 @@ int main(int argc, char *argv[])
   int nbCreatedCopies[Nc];
   double R_record[nbrTimeSteps]; double R, total_R;
 
-  MPI_Status status;
-
-  //Set up variables and containers for output
+    //Set up variables and containers for output
   string folderName[local_Nc], instru;
   stringstream weightsFileName, copiesFileName, buf;
   ofstream weightsFile, copiesFile;
@@ -155,7 +202,11 @@ int main(int argc, char *argv[])
   ofstream output_file;
 #endif
   instru = "mkdir " + masterFolderName;
-  if(my_rank==MASTER){cout << "Created parent folder " << masterFolderName.c_str() << endl;}
+  if(my_rank==MASTER)
+    {
+      cout << "Created parent folder " << masterFolderName.c_str() << endl;
+      ascii_output << "Created parent folder " << masterFolderName.c_str() << endl;
+    }
   if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
 #ifdef FORCE_IO
@@ -170,6 +221,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+  // INITIALIZATION PROCEDURE ------------------------------------------------------------------------
   ifstream popFile;
   string path_to_file, fileName;
 
@@ -183,6 +235,13 @@ int main(int argc, char *argv[])
 	{
 	  cout << "Index file " << path_to_file.c_str() << " successfully opened" << endl;
 	  cout << "-------------" << endl;
+	  ascii_output << "Index file " << path_to_file.c_str() << " successfully opened" << endl;
+	  ascii_output << "-------------" << endl;
+	}
+      else
+	{
+	  cout << "ERROR : COULD NOT OPEN INDEX FILE " << path_to_file << endl;
+	  ascii_output << "ERROR : COULD NOT OPEN INDEX FILE " << path_to_file << endl;
 	}
       for(int j=local_Nc;j<Nc;j++)
   	{
@@ -220,7 +279,19 @@ int main(int argc, char *argv[])
       delete[] buffer;
     }
   MPI_Barrier(MPI_COMM_WORLD);
-  if(my_rank==MASTER){cout << "Looking good, about to enter timestep loop : " << endl;}
+    if(my_rank==MASTER)
+    {
+      cout << "--------------------- " << endl;
+      cout << "--------------------- " << endl;
+      ascii_output << "--------------------- " << endl;
+      ascii_output << "--------------------- " << endl;
+    }
+
+    if(my_rank==MASTER){
+      cout << "Looking good, about to enter timestep loop : " << endl;
+      ascii_output << "Looking good, about to enter timestep loop : " << endl;
+    }
+    
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
@@ -258,17 +329,12 @@ int main(int argc, char *argv[])
 	  output_file.open(fileName.c_str(), ios::binary);
 #endif
 
-	  //cout << "Process " << my_rank << "t = " << t << "j = " << j << endl;
-	  
-	  //MPI_Barrier(MPI_COMM_WORLD);
+	 
 	  generate_random_field(Dx, map, error);
-	  // cout << "PROCESS " << my_rank << endl;
-	  // MPI_Barrier(MPI_COMM_WORLD);
-
-
+	 
 	  for(int tt=0;tt<lbmTimeSteps1;tt++)
 	    {
-	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau);
+	      streamingAndCollisionComputeMacroBodyForceSpatial(state[j], fout, rho, ux, uy, beta0, map, tau, eps);
 	      computeDomainNoSlipWalls_BB(fout, state[j]);
 	      computeSquareBounceBack_TEST(fout, state[j]);
 	      // RESET NODES INSIDE THE SQUARE TO EQUILIBRIUM DISTRIBUTION
@@ -289,11 +355,12 @@ int main(int argc, char *argv[])
 	      //	      memcpy(state[j], fout, N*sizeof(double));
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
+	      F = F*oneOvF0;
 #ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F/F0;
+	      s_ += F;
 	    } //END LOOP ON TIMESTEPS
 	  
 	  for(int tt=0;tt<lbmTimeSteps2;tt++)
@@ -319,11 +386,12 @@ int main(int argc, char *argv[])
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
+	      F = F*oneOvF0;
 #ifdef FORCE_IO
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
-	      s_ += F/F0;
+	      s_ += F;
 	    } //END LOOP ON TIMESTEPS
 #ifdef FORCE_IO
 	  output_file.close();
@@ -529,17 +597,7 @@ int main(int argc, char *argv[])
       	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
       	}
       MPI_Barrier(MPI_COMM_WORLD);
-      // if(my_rank == MASTER)
-      // 	{
-      // 	  cout << "------ AFTER COMM ------- " << endl;
-      // 	}
-      // // MPI_Barrier(MPI_COMM_WORLD);
-      // // for(int j=0;j<local_Nc;j++)
-      // // 	{
-      // // 	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(state[j], omega) << endl;
-      // // 	}
-      // // MPI_Barrier(MPI_COMM_WORLD);
-      
+        
     } //TIMESTEPS
   if(my_rank==MASTER)
     {
@@ -549,6 +607,16 @@ int main(int argc, char *argv[])
       rvalues.write((char*)&R_record[0], nbrTimeSteps*sizeof(double));
       rvalues.close();
     }
+
+    // FREE MEMORY -------------------------
+  for(int j=0;j<local_Nc;j++)
+    {
+      delete[] state[j];
+    }
+  delete[] state;
+  
+  // -------------------------------------
+  
   MPI_Finalize();
 } // MAIN()
 	  

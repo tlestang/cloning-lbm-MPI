@@ -47,7 +47,7 @@ void streamingAndCollisionComputeMacroBodyForce(double *fin, double *fout, doubl
     }
 }
 
-void streamingAndCollisionComputeMacroBodyForceSpatial(double *fin, double *fout, double *rho, double *ux, double *uy, double beta0, double *map, double tau)
+void streamingAndCollisionComputeMacroBodyForceSpatial(double *fin, double *fout, double *rho, double *ux, double *uy, double beta0, double *map, double tau, double eps)
   
 {
   double rhoDum, ftemp;
@@ -56,7 +56,6 @@ void streamingAndCollisionComputeMacroBodyForceSpatial(double *fin, double *fout
   double beta;
   int nx, ny;
 
-  double eps = 0.1;
     for(int x=0;x<Dx;x++)
     {
       for(int y=0;y<Dy;y++)
