@@ -135,8 +135,8 @@ int main(int argc, char *argv[])
 
     //COMPUTE CHARESTICTC VELOCITY AND TIME
   beta0 = (1./(Dx-1))*((double)Lx/(Dy-1))*U0*U0;
-  T0 = (Lx-1)/U0;
-  F0 = (U0*U0)*(Lx-1)*0.5;
+  T0 = Lx/U0;
+  F0 = (U0*U0)*Lx*0.5;
   oneOvF0 = 1./F0;   
    
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0

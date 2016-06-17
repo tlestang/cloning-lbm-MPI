@@ -196,13 +196,17 @@ int main(int argc, char *argv[])
   map = (double *) memalign(getpagesize(), Dx*Dy*sizeof(double));
 
 
-  int temp[2*Nc]; 
+  int temp[2*Nc]; bool mark_perturb[local_Nc];
   int comm_instru_Send[local_Nc]; int comm_instru_Recv[local_Nc];
   double s[Nc]; double s_;
   int nbCreatedCopies[Nc];
   double R_record[nbrTimeSteps]; double R, total_R;
 
-
+  //Initialize perturbation flag
+  for (int j=0;j<local_Nc;j++)
+    {
+      mark_perturb[j] = false;
+    }
 
   //Set up variables and containers for output
   string instru, openLabelsFile;
@@ -401,8 +405,10 @@ int main(int argc, char *argv[])
 #endif
 
 	  // PERTURBATION OF THE CLONE -------------------------------------------------------------
-
-	  error = generatePerturbedState(state[j], popsForPerturb, eps, NN, N);
+	  if(mark_perturb[j])
+	    {
+	      error = generatePerturbedState(state[j], popsForPerturb, eps, NN, N);
+	    }
 
 	  // END OF PERTURBATION OF THE CLONE ------------------------------------------------------
 
@@ -588,6 +594,11 @@ int main(int argc, char *argv[])
       //BROADCAST OF COMMUNICATION TABLE TEMP[] FROM MASTER
       MPI_Bcast(&temp[0], 2*nbComm, MPI_INT, MASTER, MPI_COMM_WORLD);
 
+      //Initialize perturbation flag
+      for (int j=0;j<local_Nc;j++)
+	{
+	  mark_perturb[j] = false;
+	}
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
       // SOMETHING
@@ -619,6 +630,8 @@ int main(int argc, char *argv[])
       		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
       		cloneIdx = cte%local_Nc;
       		MPI_Recv(state[cloneIdx], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		//MARK THE NEW CLONE FOR PERTURBATION
+		mark_perturb[cloneIdx] = true;
       	      }
       	  }
       	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
