@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
 
     //COMPUTE CHARESTICTC VELOCITY AND TIME
   beta0 = (1./(Dx-1))*((double)Lx/(Dy-1))*U0*U0;
-  T0 = (Lx-1)/U0;
-  F0 = (U0*U0)*(Lx-1)*0.5;
+  T0 = Lx/U0;
+  F0 = (U0*U0)*Lx*0.5;
   oneOvF0 = 1./F0;   
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
 
@@ -205,24 +205,29 @@ int main(int argc, char *argv[])
 
 
   //Set up variables and containers for output
-  string folderName[local_Nc], instru;
-  stringstream weightsFileName, copiesFileName, buf;
-  ofstream weightsFile, copiesFile;
-#ifdef FORCE_IO
-  ofstream output_file;
-#endif
+  string instru, openLabelsFile;
+  stringstream buf;
+  ofstream labelsFile;
+
   instru = "mkdir " + masterFolderName;
   if(my_rank==MASTER)
     {
+      system(instru.c_str());
+      openLabelsFile = masterFolderName + "labels.dat";
+      cout << "creating label file " << openLabelsFile << endl;
+      labelsFile.open(openLabelsFile.c_str(), ios::binary);
+      
       cout << "Created parent folder " << masterFolderName.c_str() << endl;
       ascii_output << "Created parent folder " << masterFolderName.c_str() << endl;
     }
-  if(my_rank==MASTER){system(instru.c_str());}
   MPI_Barrier(MPI_COMM_WORLD);
 #ifdef FORCE_IO
+  ofstream output_file;
+  string folderName[local_Nc];
+  string IO_FileName = "data_force.datout";
   for(int i=0;i<local_Nc;i++)
     {
-      buf << "clone_" << i + my_rank*local_Nc;
+      buf << "clone_" << i + my_rank*local_Nc << "/";
       folderName[i] = masterFolderName + buf.str();
       buf.str(string());
       buf.clear();
@@ -380,21 +385,8 @@ int main(int argc, char *argv[])
 
       if(my_rank==MASTER)
 	{
-	  weightsFileName << "weights_evolution_" << t;
-	  copiesFileName << "copies_evolution_" << t;
-	  instru = masterFolderName + weightsFileName.str();
-	  weightsFile.open(instru.c_str(), ios::binary);
-	  instru = masterFolderName + copiesFileName.str();
-	  copiesFile.open(instru.c_str(), ios::binary);
 	  cout << "    This is cloning step " << t << endl;
-	  cout << "    Created files " << weightsFileName.str().c_str() << " and " << copiesFileName.str().c_str() << " in " << masterFolderName.c_str() << endl;
 	  ascii_output << "    This is cloning step " << t << endl;
-	  ascii_output << "    Created files " << weightsFileName.str().c_str() << " and " << copiesFileName.str().c_str() << " in " << masterFolderName.c_str() << endl;
-	  
-	  weightsFileName.str(string());
-	  weightsFileName.clear();
-	  copiesFileName.str(string());
-	  copiesFileName.clear();
 	}
       
       //SIMULATE THE SYSTEM DURING dT AND COMPUTE WEIGHT
@@ -404,11 +396,8 @@ int main(int argc, char *argv[])
 	  s_ = 0;
 	  
 #ifdef FORCE_IO
-	  buf << "/evolution_" << t << "_" << "clone_" << j+my_rank*local_Nc;
-	  fileName = folderName[j] + buf.str();
-	  buf.str(string());
-	  buf.clear();
-	  output_file.open(fileName.c_str(), ios::binary);
+	      fileName = folderName[j] + IO_FileName;
+	      output_file.open(fileName.c_str(), ios::binary | ios::app);
 #endif
 
 	  // PERTURBATION OF THE CLONE -------------------------------------------------------------
@@ -498,10 +487,6 @@ int main(int argc, char *argv[])
       //MASTER POST-PROCESSES EVOLUTION OF COPIES AND DO THE CLONING
       if(my_rank==MASTER)
       	{
-      	  //WRITE WEIGHTS ON DISK
-      	  weightsFile.write((char*)&s[0], Nc*sizeof(double));
-      	  weightsFile.close();
-
       	  total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
 
       	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
@@ -511,8 +496,6 @@ int main(int argc, char *argv[])
       	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
       	      NcPrime += nbCreatedCopies[j]; //COMPUTE NcPrime BY COUNTING
       	    }
-      	  //WRITE NB OF CREATED COPIES
-      	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
       	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
       	  deltaN = NcPrime - Nc;
       	  //FILLS THE TEMP[] ARRAY FOR UNIFORM SAMPLING OVER THE NEW CLONES (SEE MANUAL)
@@ -538,13 +521,15 @@ int main(int argc, char *argv[])
       		{
       		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
       		  idx = rand()%(NcPrime-i); //random number between [0:NcPrime-i-1]
+		  //UPDATE TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
+      		  //(SEE MANUAL)
+      		  temp[idx] = temp[NcPrime-i-1];
+		  
       		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
       		  cloneIdx = temp[idx];
       		  //RECORD THE KILL
       		  nbCreatedCopies[cloneIdx]--;
-      		  //UPDATE TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
-      		  //(SEE MANUAL)
-      		  temp[idx] = temp[NcPrime-i-1];
+
       		}
       	    }
 		
@@ -554,15 +539,15 @@ int main(int argc, char *argv[])
       		{
       		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
       		  idx = rand()%NcPrime;
+		  temp[NcPrime+i] = temp[idx];
       		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
       		  cloneIdx = temp[idx];
-      		  //RECORD THE KILL
+		  //RECORD THE KILL
       		  nbCreatedCopies[cloneIdx]++;
       		}
       	    }
 
-      	  copiesFile.write((char*)&nbCreatedCopies[0], Nc*sizeof(int));
-      	  copiesFile.close();
+      	  labelsFile.write((char*)&temp[0], Nc*sizeof(int));
 	  
       	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
       	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
@@ -592,10 +577,7 @@ int main(int argc, char *argv[])
       		}
       	    }
       	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
-      	  // for(int i=0;i<nbComm;i++)
-      	  //   {
-          //     cout << temp[2*i] << " ---> " << temp[2*i+1] << endl;
-          //   }
+
 	} // IF MASTER
 
       //MPI_Barrier(MPI_COMM_WORLD);
@@ -606,15 +588,6 @@ int main(int argc, char *argv[])
       //BROADCAST OF COMMUNICATION TABLE TEMP[] FROM MASTER
       MPI_Bcast(&temp[0], 2*nbComm, MPI_INT, MASTER, MPI_COMM_WORLD);
 
-      //if(my_rank==MASTER){cout << "Now doing communications" << endl;}
-
-      // //----------------------------
-      // // for(int j=0;j<local_Nc;j++)
-      // // 	{
-      // // 	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(state[j], omega) << endl;
-      // // 	}
-      
-      
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
       // SOMETHING
@@ -651,17 +624,7 @@ int main(int argc, char *argv[])
       	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
       	}
       MPI_Barrier(MPI_COMM_WORLD);
-      // if(my_rank == MASTER)
-      // 	{
-      // 	  cout << "------ AFTER COMM ------- " << endl;
-      // 	}
-      // // MPI_Barrier(MPI_COMM_WORLD);
-      // // for(int j=0;j<local_Nc;j++)
-      // // 	{
-      // // 	  cout << "Proc " << my_rank << " clone " << j << " : " << computeForceOnSquare(state[j], omega) << endl;
-      // // 	}
-      // // MPI_Barrier(MPI_COMM_WORLD);
-      
+
     } //TIMESTEPS
 
   
@@ -671,6 +634,7 @@ int main(int argc, char *argv[])
       //WRITE SEQUENCE OF R's ON DISK FOR SCGF CALCULATION LATER
       ofstream rvalues(instru.c_str(), ios::binary);
       rvalues.write((char*)&R_record[0], nbrTimeSteps*sizeof(double));
+      labelsFile.close();
       rvalues.close();
       ascii_output.close();
     }
