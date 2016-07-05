@@ -11,9 +11,9 @@ void write_fluid_vtk(int time, int Dx, int Dy, double *rho, double *ux, double *
   /// Create filename
   stringstream fileName;
   fileName << "fluid_t" << time << ".vtk";
-  string output_filename = string(folderName) + "/vtk_fluid/" + fileName.str();
+  string output_filename = string(folderName) + fileName.str();
   ofstream output_file;
-
+  double rho0 = 1.0;
   /// Open file
   output_file.open(output_filename.c_str());
 
@@ -40,13 +40,13 @@ void write_fluid_vtk(int time, int Dx, int Dy, double *rho, double *ux, double *
   output_file << "LOOKUP_TABLE default\n";
   for(int Y =0; Y < Dy ; ++Y)
     for(int X = 0; X < Dx; ++X)
-      output_file <<  rho[idx(X,Y)] << "\n";
+      output_file <<  rho[idx(X,Y)] - rho0 << "\n";
 
   /// Write velocity
   output_file << "VECTORS velocity_vector float\n";
   for(int Y = 0; Y < Dy ; ++Y)
     for(int X = 0; X < Dx; ++X)
-      output_file << ux[idx(X,Y)] << " " << uy[idx(X,Y)] << " 0\n";
+      output_file << ux[idx(X,Y)]  << " " << uy[idx(X,Y)] << " 0\n";
 
   /// Close file
   output_file.close();

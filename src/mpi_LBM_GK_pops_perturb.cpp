@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
   // --- PARAMETERS FOR LBM ---
   double tau = 1.0, beta = 1.0, t0 = 1.0, beta0=1.0, U0=1.0;
   int Lx = 0, Ly = 0;
-
+  int facquVTK=0, tVTK=0;
   //MPI_ INIT
   int my_rank, p, tag=0;
   MPI_Status status;
@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
       input_file >> alpha;
       input_file >> path_to_folder;
       input_file >> masterFolderName;
+      input_file >> facquVTK;
     }
   else{error=1;}
 
@@ -115,6 +116,7 @@ int main(int argc, char *argv[])
   cloneIdxMin = my_rank*local_Nc;
   int NcPrime, deltaN, copyIdx, k;
   int nbrTimeSteps = floor(T/dT);
+
   int l= 0; int idx;
 
   
@@ -144,7 +146,8 @@ int main(int argc, char *argv[])
   double delta_t = 1.0/T0; //LBM time steps in units of physical time T0
 
   int lbmTimeSteps2 = floor(dT*T0);
-
+  int nbrVTK = floor(lbmTimeSteps2/facquVTK);
+  if(my_rank==MASTER){cout << nbrTimeSteps << " " << nbrVTK << endl;}
 
 
   if(my_rank==MASTER)
@@ -404,8 +407,9 @@ int main(int argc, char *argv[])
 	  s_ = 0;
 	  
 #ifdef FORCE_IO
-	      fileName = folderName[j] + IO_FileName;
-	      output_file.open(fileName.c_str(), ios::binary | ios::app);
+	  tVTK = t*nbrVTK;
+	  fileName = folderName[j] + IO_FileName;
+	  output_file.open(fileName.c_str(), ios::binary | ios::app);
 #endif
 
 	  // PERTURBATION OF THE CLONE -------------------------------------------------------------
@@ -445,6 +449,11 @@ int main(int argc, char *argv[])
 	      F = computeForceOnSquare(state[j], omega);
 	      F = F*oneOvF0;
 #ifdef FORCE_IO
+	      if(tt%facquVTK == 0)
+		{
+		  write_fluid_vtk(tVTK, Dx, Dy, rho, ux, uy, folderName[j].c_str());
+		  tVTK++;
+		}
 	      output_file.write((char*)&F, sizeof(double));
 #endif
 	      // COMPUTE WEIGHT
