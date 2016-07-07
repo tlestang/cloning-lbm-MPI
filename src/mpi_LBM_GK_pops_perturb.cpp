@@ -381,12 +381,6 @@ int main(int argc, char *argv[])
     {
       MPI_Send(&error, 1, MPI_INT, MASTER, my_rank, MPI_COMM_WORLD);
     }
-  
-  
-  if(my_rank==MASTER){
-    cout << "Looking good, about to enter timestep loop : " << endl;
-    ascii_output << "Looking good, about to enter timestep loop : " << endl;
-  }
 
    //TIME EVOLUTION OVER TOTAL TIME T (T/dT CLONING STEPS)
   for(int t=0;t<nbrTimeSteps;t++)
@@ -396,8 +390,8 @@ int main(int argc, char *argv[])
 
       if(my_rank==MASTER)
 	{
-	  cout << "    This is cloning step " << t << endl;
-	  ascii_output << "    This is cloning step " << t << endl;
+	  cout << "This is cloning step " << t << endl;
+	  ascii_output << "This is cloning step " << t << endl;
 	}
       
       //SIMULATE THE SYSTEM DURING dT AND COMPUTE WEIGHT
@@ -493,7 +487,7 @@ int main(int argc, char *argv[])
       	    {
       	      tag = source;
       	      MPI_Recv(&s[source*local_Nc], local_Nc, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
-      	      tag = 2*source;
+      	      tag = source + p;
       	      MPI_Recv(&R, 1, MPI_DOUBLE, source, tag, MPI_COMM_WORLD, &status);
       	      total_R += R;
       	    }
@@ -502,7 +496,7 @@ int main(int argc, char *argv[])
       	{
       	  tag = my_rank;
       	  MPI_Send(&s[0], local_Nc, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
-      	  tag = 2*my_rank;
+      	  tag = my_rank + p;
       	  MPI_Send(&R, 1, MPI_DOUBLE, MASTER, tag, MPI_COMM_WORLD);
       	}
       MPI_Barrier(MPI_COMM_WORLD);
@@ -573,6 +567,9 @@ int main(int argc, char *argv[])
       	  labelsFile.write((char*)&temp[0], Nc*sizeof(int));
 	  
       	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
+	  cout << "  * Evolution and cloning/pruning - DONE " << endl;
+	  ascii_output << "  * Evolution and cloning/pruning - DONE " << endl;
+
       	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
       	  //LOOP ON ALL Nc CLONES
       	  for(int i=0;i<Nc;i++) 
@@ -599,8 +596,17 @@ int main(int argc, char *argv[])
       		  nbCreatedCopies[i]--; //RECORD THAT 1 CLONE OF COPY i HAS BEEN TAKEN CARE OF
       		}
       	    }
+	  
       	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
-
+	  cout << "  * Creation of communication table - DONE " << endl;
+	  ascii_output << "  * Creation of communication table - DONE " << endl;
+	  for(int i=0;i<nbComm;i++)
+	    {
+	      cout<<"    "<<temp[2*i]<<"->"<<temp[2*i+1]<<" | ";
+	      ascii_output<<"    "<<temp[2*i]<<"->"<<temp[2*i+1]<<" | ";
+	    }
+	  cout << endl;
+	  ascii_output<<endl;
 	} // IF MASTER
 
       //MPI_Barrier(MPI_COMM_WORLD);
@@ -621,6 +627,12 @@ int main(int argc, char *argv[])
 
       //EACH PROCESS RUNS THE FOLLOWING LOOP ON COMMUNICATIONS AND CHECK IF IT MUST DO
       // SOMETHING
+      if(my_rank==MASTER)
+	{
+	  cout << "  * Now doing the " << nbComm << " communications " << endl;
+	  ascii_output << "  * Now doing the " << nbComm << " communications " << endl;
+	}
+	  
       for(int i=0;i<nbComm;i++)
       	{
       	  //COMPUTE THE ABSOLUTE INDEXES OF CLONES CONCERNED BY COMMUNICATION
@@ -643,12 +655,16 @@ int main(int argc, char *argv[])
       		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
       		cloneIdx = ctm%local_Nc;
       		MPI_Send(state[cloneIdx], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
+		ascii_output << "    I'm proc. "<<my_rank<<" sending my clone "<<cloneIdx<<"("<<ctm<<")"<<" to proc. "<<dest<<" to replace dead clone "<<cte<< endl;
+		cout << "    I'm proc. "<<my_rank<<" sending my clone "<<cloneIdx<<"("<<ctm<<")"<<" to proc. "<<dest<<" to replace dead clone "<<cte<< endl;
       	      }
       	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
       	      {
       		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
       		cloneIdx = cte%local_Nc;
       		MPI_Recv(state[cloneIdx], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
+		ascii_output << "    I'm proc. "<<my_rank<<" replacing my clone "<<cloneIdx<<"("<<cte<<")"<<" from proc. "<<sender<<endl;
+		cout << "    I'm proc. "<<my_rank<<" replacing my clone "<<cloneIdx<<"("<<cte<<")"<<" from proc. "<<sender<<endl;
 #ifdef _SMART_PERTURB
 		//MARK THE NEW CLONE FOR PERTURBATION
 		mark_perturb[cloneIdx] = true;
@@ -659,6 +675,11 @@ int main(int argc, char *argv[])
       	}
       MPI_Barrier(MPI_COMM_WORLD);
 
+      if(my_rank==MASTER)
+	{
+	  cout << " " << endl;
+	  ascii_output << " " << endl;
+	}
     } //TIMESTEPS
 
   
