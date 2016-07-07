@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
   int local_Nc, cloneIdxMin, cloneIdx;
   local_Nc = Nc/p;
   cloneIdxMin = my_rank*local_Nc;
-  int NcPrime, deltaN, copyIdx, k;
+  int NcPrime, deltaN, copyIdx, kk;
   int nbrTimeSteps = floor(T/dT);
 
   int l= 0; int idx;
@@ -516,13 +516,13 @@ int main(int argc, char *argv[])
       	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
       	  deltaN = NcPrime - Nc;
       	  //FILLS THE TEMP[] ARRAY FOR UNIFORM SAMPLING OVER THE NEW CLONES (SEE MANUAL)
-      	  k=0;
+      	  kk=0;
       	  for(int j=0;j<Nc;j++)
       	    {
       	      for(int i=0;i<nbCreatedCopies[j];i++)
       		{
-      		  temp[k] = j;
-      		  k++;
+      		  temp[kk] = j;
+      		  kk++;
       		}
       	    }
 	
@@ -569,7 +569,18 @@ int main(int argc, char *argv[])
       	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
 	  cout << "  * Evolution and cloning/pruning - DONE " << endl;
 	  ascii_output << "  * Evolution and cloning/pruning - DONE " << endl;
-
+	  cout << "    nbCreatedCopies : ";
+	  ascii_output << "    nbCreatedCopies : ";
+	  int ss=0;
+	  for(int j=0;j<Nc;j++){
+	    cout << j << "|"<< nbCreatedCopies[j] << " ";
+	    ascii_output << j << "|"<< nbCreatedCopies[j] << " ";
+	    ss += nbCreatedCopies[j];
+	  }
+	  cout << endl;
+	  ascii_output << endl;
+	  cout << "    Total # copies after cloning/pruning : " << ss << endl;
+	  ascii_output << "    Total # copies after cloning/pruning : " << ss << endl;
       	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
       	  //LOOP ON ALL Nc CLONES
       	  for(int i=0;i<Nc;i++) 
@@ -577,21 +588,21 @@ int main(int argc, char *argv[])
       	      //IF COPY GAVE BIRTH TO CLONES, LOOP ON THEM
       	      while(nbCreatedCopies[i] > 1)
       		{
-      		  flag = true; k=0;
+      		  flag = true; kk=0;
       		  //SEARCH FOR A KILLED COPY TO REPLACE IT BY THE CLONE OF COPY i
       		  while(flag)
       		    {
-      		      if(nbCreatedCopies[k]==0) //IF COPY k WERE KILLED
+      		      if(nbCreatedCopies[kk]==0) //IF COPY k WERE KILLED
       			{
       			  //RECORD THE COMMUNICATION IN TEMP[]
       			  temp[2*nbComm] = i; // AN INSTANCE OF COPY i MUST REPLACE COPY k
-      			  temp[2*nbComm+1] = k; // COPY k must be replaced by A CLONE OF COPY i
+      			  temp[2*nbComm+1] = kk; // COPY k must be replaced by A CLONE OF COPY i
       			  //NEXT LINE SO THAT COPY k IS NOT CHOSEN AGAIN IN FURTHER ITERATIONS 
-      			  nbCreatedCopies[k] = -1; 
+      			  nbCreatedCopies[kk] = -1; 
       			  nbComm++; //COMPUTE THE NB OF COMM. BY COUNTING
       			  flag = false; //EXIT WHILE LOOP WHEN FOUND A PLACE FOR CLONE OF COPY i
       			}
-      		      k++;
+      		      kk++;
       		    }
       		  nbCreatedCopies[i]--; //RECORD THAT 1 CLONE OF COPY i HAS BEEN TAKEN CARE OF
       		}
