@@ -536,15 +536,15 @@ int main(int argc, char *argv[])
       	    {
       	      for(int i=0;i<deltaN;i++)
       		{
-      		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
+      		  //CHOOSES A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
       		  idx = rand()%(NcPrime-i); //random number between [0:NcPrime-i-1]
-		  //UPDATE TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
+		  //UPDATES TEMP[] ARRAY FOR NEXT ITERATION OF THE PRUNING PROCESS
       		  //(SEE MANUAL)
-      		  temp[idx] = temp[NcPrime-i-1];
-		  
-      		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
+		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
       		  cloneIdx = temp[idx];
-      		  //RECORD THE KILL
+		  //THEN REPLACES INDEX OF DEAD CLONE BY THE LAST ONE OF THE ARRAY
+      		  temp[idx] = temp[NcPrime-i-1];
+		  //RECORDS THE KILL
       		  nbCreatedCopies[cloneIdx]--;
 
       		}
@@ -554,11 +554,12 @@ int main(int argc, char *argv[])
       	    {
       	      for(int i=0;i<-deltaN;i++)
       		{
-      		  //CHOOSE A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
+      		  //CHOOSES A CLONE AT RAND. UNIFORMLY THROUGH NEWLY CREATED CLONES
       		  idx = rand()%NcPrime;
-		  temp[NcPrime+i] = temp[idx];
-      		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
+		  //EXTRACT CLONE ABSOLUTE INDEX FROM TEMP[] ARRAY
       		  cloneIdx = temp[idx];
+		  //THEN ADDS INDEX OF NEW CLONE ON TOP OF ARRAY
+		  temp[NcPrime+i] = temp[idx];
 		  //RECORD THE KILL
       		  nbCreatedCopies[cloneIdx]++;
       		}
