@@ -10,22 +10,22 @@ int main()
 {
   stringstream fileName, ssbuf;
   string dirName;
-  int Nc;
+  int Nc, facquVTK;
   double T, dT;
   string buf, masterFolderName = "outputFolder/", folderName, vtkName;
   
   cout << "Input output directory (/ AT THE END)" << endl;
-  //cin >> dirName;
-  dirName = "test/";
+  cin >> dirName;
+  //dirName = "test/";
   cout << "Input number of replica" << endl;
-  //cin >> Nc; 
-  Nc = 8;
+  cin >> Nc; 
+  //Nc = 8;
   cout << "Input total time of run and cloning time" << endl;
-  //cin >> T; cin >> dT;
-  T = 15; dT = 5;
+  cin >> T; cin >> dT;
+  cout << "Input VTK file sampling period (in timesteps)" << endl;
+  cin >> facquVTK;
+  //T = 15; dT = 5;
 
-  int facquVTK = 1000;
-  
   int nt = floor(T/dT);
   int L; double U, T0, dt;
   L = 32; U = 0.03; T0 = L/U;
@@ -48,7 +48,7 @@ int main()
 
   for (int j=0;j<Nc;j++)
     {
-      cout << "Clone " << j+1 << "/" << Nc << endl;
+      cout << "Reconstructing trajetory and drag signal for clone " << j+1 << "/" << Nc << endl;
       
       labelArray[j] = j;
 
@@ -62,11 +62,7 @@ int main()
       buf = folderName + "data_force.datout";
       reconstructed.open(buf.c_str(), ios::binary);
 
-      /* OPEN TRAJ. FILE FOR CLONE J*/
-      ssbuf << "clone_" << cloneIdx << "/data_force.datout";
-      buf = dirName + ssbuf.str();
-      ssbuf.str(string()); ssbuf.clear();
-      forceFile.open(buf.c_str(), ios::binary);
+
 
       /* LOOP ON TIME STEPS BACKWARDS IN TIME */
       cloneIdx = j;
@@ -75,6 +71,12 @@ int main()
       int vtkIdxStart = nbrVTK*nt -1;
       for(int t=nt-1;t>-1;t--)
 	{
+	  /* OPEN TRAJ. FILE FOR CLONE J*/
+	  ssbuf << "clone_" << cloneIdx << "/data_force.datout";
+	  buf = dirName + ssbuf.str();
+	  ssbuf.str(string()); ssbuf.clear();
+	  forceFile.open(buf.c_str(), ios::binary);
+	  
 	  if(t>0)
 	    {
 	      labels.seekg(Nc*(t-1)*sizeof(int), ios::beg);

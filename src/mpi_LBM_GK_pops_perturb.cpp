@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
   double tau = 1.0, beta = 1.0, t0 = 1.0, beta0=1.0, U0=1.0;
   int Lx = 0, Ly = 0;
   int facquVTK=0, tVTK=0;
+  double Fmean = 0.0;
   //MPI_ INIT
   int my_rank, p, tag=0;
   MPI_Status status;
@@ -73,6 +74,7 @@ int main(int argc, char *argv[])
       input_file >> Lx; Ly = Lx;
       input_file >> tau;
       input_file >> U0;
+      input_file >> Fmean;
       input_file >> alpha;
       input_file >> path_to_folder;
       input_file >> masterFolderName;
@@ -131,6 +133,7 @@ int main(int argc, char *argv[])
   xmin = (Dx-1)/2; xmax = xmin + Lx;
   ymin = (Dy-1)/2 - Ly/2; ymax = ymin + Ly;
   int N = Dx*Dy*9;
+
   double cs = 1./sqrt(3); double rho0 = 1.0;
   double nu = 1./3.*(tau-0.5);
   double uxSum, uxMean;
@@ -441,7 +444,7 @@ int main(int argc, char *argv[])
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
-	      F = F*oneOvF0;
+	      F = F*oneOvF0 - Fmean;
 #ifdef FORCE_IO
 	      if(tt%facquVTK == 0)
 		{
