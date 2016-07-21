@@ -87,18 +87,18 @@ int main()
 	  forceFile.read((char*)&f[t*ndt], ndt*sizeof(double));
 	  forceFile.close();
 	  
-	  for(int vtkIdx=vtkIdxStart;vtkIdx>vtkIdxStart-nbrVTK;vtkIdx--)
-	    {
-	      ssbuf << "clone_" << cloneIdx << "/" << "fluid_t" << vtkIdx << ".vtk";
-	      vtkName = dirName + ssbuf.str(); ssbuf.str(string()); ssbuf.clear(); 
+	  // for(int vtkIdx=vtkIdxStart;vtkIdx>vtkIdxStart-nbrVTK;vtkIdx--)
+	  //   {
+	  //     ssbuf << "clone_" << cloneIdx << "/" << "fluid_t" << vtkIdx << ".vtk";
+	  //     vtkName = dirName + ssbuf.str(); ssbuf.str(string()); ssbuf.clear(); 
 
-	      ssbuf << "clone_" << j << "/" << "fluid_t" << vtkIdx << ".vtk";
-	      buf = "cp " + vtkName + " " + masterFolderName + ssbuf.str();
-	      ssbuf.str(string()); ssbuf.clear();
-	      system(buf.c_str());
+	  //     ssbuf << "clone_" << j << "/" << "fluid_t" << vtkIdx << ".vtk";
+	  //     buf = "cp " + vtkName + " " + masterFolderName + ssbuf.str();
+	  //     ssbuf.str(string()); ssbuf.clear();
+	  //     system(buf.c_str());
 
-	    }
-	  vtkIdxStart -= nbrVTK;
+	  //   }
+	  // vtkIdxStart -= nbrVTK;
 
 
 	  labels.read((char*)&labelArray[0], Nc*sizeof(int));

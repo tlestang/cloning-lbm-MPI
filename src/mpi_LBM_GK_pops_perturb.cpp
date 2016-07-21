@@ -24,7 +24,7 @@
 
 #define MASTER 0
 #define MAX_CHARS 50
-
+#define AVG 1.775
 using namespace std;
 
 //GLOBAL PARAMETERS FOR LBM
@@ -74,7 +74,6 @@ int main(int argc, char *argv[])
       input_file >> Lx; Ly = Lx;
       input_file >> tau;
       input_file >> U0;
-      input_file >> Fmean;
       input_file >> alpha;
       input_file >> path_to_folder;
       input_file >> masterFolderName;
@@ -444,7 +443,10 @@ int main(int argc, char *argv[])
 	      fout = pivot;
 	      // COMPUTE FORCE ON SQUARE
 	      F = computeForceOnSquare(state[j], omega);
-	      F = F*oneOvF0 - Fmean;
+	      F = F*oneOvF0;
+#ifdef ZERO_MEAN
+	      F = F - AVG;
+#endif
 #ifdef FORCE_IO
 	      if(tt%facquVTK == 0)
 		{
