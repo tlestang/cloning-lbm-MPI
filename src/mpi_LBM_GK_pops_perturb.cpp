@@ -149,8 +149,6 @@ int main(int argc, char *argv[])
 
   int lbmTimeSteps2 = floor(dT*T0);
   int nbrVTK = floor(lbmTimeSteps2/facquVTK);
-  if(my_rank==MASTER){cout << nbrTimeSteps << " " << nbrVTK << endl;}
-
 
   if(my_rank==MASTER)
     {
@@ -409,6 +407,7 @@ int main(int argc, char *argv[])
 #endif
 
 	  // PERTURBATION OF THE CLONE -------------------------------------------------------------
+
 #ifdef _SMART_PERTURB
 	  if(mark_perturb[j])
 	    {
@@ -510,12 +509,12 @@ int main(int argc, char *argv[])
       if(my_rank==MASTER)
       	{
       	  total_R /= Nc; //NORMALIZATION OF THE AVERAGE WEIGHT
-
       	  NcPrime = 0; //NcPRIME IS THE NUMBER OF COPIES AFTER CLONING
       	  for(int j=0;j<Nc;j++)
       	    {
       	      //EACH COPY j LEADS TO nbCreatedCopies[j] CLONES (INCLUDING ITSELF)
-      	      nbCreatedCopies[j] = floor(s[j]/total_R + drand48());
+	      a = drand48();
+      	      nbCreatedCopies[j] = floor(s[j]/total_R + a);
       	      NcPrime += nbCreatedCopies[j]; //COMPUTE NcPrime BY COUNTING
       	    }
       	  //deltaN IS THE DIFFERENCE BETWEEN NcPRIME AND THE IMPOSED NB OF CLONES Nc
@@ -665,6 +664,11 @@ int main(int argc, char *argv[])
       		  //DO THE COPY
       		  //state[cte%local_Nc] = state[ctm%local_Nc];
       		  memcpy(state[cte%local_Nc], state[ctm%local_Nc], N*sizeof(double));
+#ifdef _SMART_PERTURB
+		  cloneIdx = cte%local_Nc;
+		  //MARK THE NEW CLONE FOR PERTURBATION
+		  mark_perturb[cloneIdx] = true;
+#endif
       		}
       	    }else{
       	    if(my_rank == sender) //IF PROC. MUST SEND A CLONE
@@ -672,32 +676,24 @@ int main(int argc, char *argv[])
       		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE MOVED
       		cloneIdx = ctm%local_Nc;
       		MPI_Send(state[cloneIdx], N, MPI_DOUBLE, dest, tag, MPI_COMM_WORLD);
-		ascii_output << "    I'm proc. "<<my_rank<<" sending my clone "<<cloneIdx<<"("<<ctm<<")"<<" to proc. "<<dest<<" to replace dead clone "<<cte<< endl;
-		cout << "    I'm proc. "<<my_rank<<" sending my clone "<<cloneIdx<<"("<<ctm<<")"<<" to proc. "<<dest<<" to replace dead clone "<<cte<< endl;
       	      }
       	    else if(my_rank == dest) //IF PROC. MUST RECEIVE A CLONE
       	      {
       		//COMPUTE THE LOCAL INDEX OF THE CLONE TO BE ERASED
       		cloneIdx = cte%local_Nc;
       		MPI_Recv(state[cloneIdx], N, MPI_DOUBLE, sender, tag, MPI_COMM_WORLD, &status);
-		ascii_output << "    I'm proc. "<<my_rank<<" replacing my clone "<<cloneIdx<<"("<<cte<<")"<<" from proc. "<<sender<<endl;
-		cout << "    I'm proc. "<<my_rank<<" replacing my clone "<<cloneIdx<<"("<<cte<<")"<<" from proc. "<<sender<<endl;
 #ifdef _SMART_PERTURB
 		//MARK THE NEW CLONE FOR PERTURBATION
 		mark_perturb[cloneIdx] = true;
 #endif
-      	      }
+      	      
       	  }
       	  //SYNCHRONIZE PROC. NOT SURE ITS NEEDED. MIGHT SEVERELY HARM PERFORMANCE.
-      	}
+	  }
       MPI_Barrier(MPI_COMM_WORLD);
 
-      if(my_rank==MASTER)
-	{
-	  cout << " " << endl;
-	  ascii_output << " " << endl;
 	}
-    } //TIMESTEPS
+    }//TIMESTEPS
 
   
   if(my_rank==MASTER)

@@ -1,4 +1,4 @@
-CXXFLAGS=-O3 -D _SMART_PERTURB -D ZERO_MEAN
+CXXFLAGS=-O3 -D FORCE_IO -D ZERO_MEAN -D _SMART_PERTURB
 LPFLAGS=-lfftw3 -lm
 
 all: main.o initialize_lattice_arrays.o streamCollCompute.o domain_noSlipWalls.o square.o force.o write_vtk.o generate_random_field.o take_curl.o covariance_fctn.o randNormal.o generate_mask.o
