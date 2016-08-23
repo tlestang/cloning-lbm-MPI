@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
 
 
   int temp[2*Nc];
+  int labels[Nc];
 #ifdef _SMART_PERTURB
   bool mark_perturb[local_Nc];
   //Initialize perturbation flag
@@ -569,7 +570,7 @@ int main(int argc, char *argv[])
       		}
       	    }
 
-      	  labelsFile.write((char*)&temp[0], Nc*sizeof(int));
+      	  
 	  
       	  // NOW CREATE COMMUNICATION TABLE (TEMP[] IS RECYCLED)
 	  cout << "  * Evolution and cloning/pruning - DONE " << endl;
@@ -587,7 +588,10 @@ int main(int argc, char *argv[])
 	  cout << "    Total # copies after cloning/pruning : " << ss << endl;
 	  ascii_output << "    Total # copies after cloning/pruning : " << ss << endl;
       	  nbComm = 0; //nbComm IS THE NUMBER OF POINT TO POINT COMM. (SENDER,DEST)
-      	  //LOOP ON ALL Nc CLONES
+	  // Int label array
+	  for(int j=0;j<Nc;j++){labels[j] = j;}
+	  //LOOP ON ALL Nc CLONES
+	  
       	  for(int i=0;i<Nc;i++) 
       	    {
       	      //IF COPY GAVE BIRTH TO CLONES, LOOP ON THEM
@@ -601,11 +605,12 @@ int main(int argc, char *argv[])
       			{
       			  //RECORD THE COMMUNICATION IN TEMP[]
       			  temp[2*nbComm] = i; // AN INSTANCE OF COPY i MUST REPLACE COPY k
-      			  temp[2*nbComm+1] = kk; // COPY k must be replaced by A CLONE OF COPY i
+      			  temp[2*nbComm+1] = kk; // COPY kk must be replaced by A CLONE OF COPY i
       			  //NEXT LINE SO THAT COPY k IS NOT CHOSEN AGAIN IN FURTHER ITERATIONS 
       			  nbCreatedCopies[kk] = -1; 
       			  nbComm++; //COMPUTE THE NB OF COMM. BY COUNTING
       			  flag = false; //EXIT WHILE LOOP WHEN FOUND A PLACE FOR CLONE OF COPY i
+			  labels[kk] = i; //Modify label array accordingly
       			}
       		      kk++;
       		    }
@@ -616,6 +621,7 @@ int main(int argc, char *argv[])
       	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
 	  cout << "  * Creation of communication table - DONE " << endl;
 	  ascii_output << "  * Creation of communication table - DONE " << endl;
+	  labelsFile.write((char*)&temp[0], Nc*sizeof(int));
 	  for(int i=0;i<nbComm;i++)
 	    {
 	      cout<<"    "<<temp[2*i]<<"->"<<temp[2*i+1]<<" | ";
