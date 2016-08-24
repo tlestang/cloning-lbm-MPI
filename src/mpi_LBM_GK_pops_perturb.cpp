@@ -621,7 +621,7 @@ int main(int argc, char *argv[])
       	  R_record[t] = total_R; // STORE AVERAGE VALUE FOR SCGF CALCULATION AT A LATER STAGE
 	  cout << "  * Creation of communication table - DONE " << endl;
 	  ascii_output << "  * Creation of communication table - DONE " << endl;
-	  labelsFile.write((char*)&temp[0], Nc*sizeof(int));
+	  labelsFile.write((char*)&labels[0], Nc*sizeof(int));
 	  for(int i=0;i<nbComm;i++)
 	    {
 	      cout<<"    "<<temp[2*i]<<"->"<<temp[2*i+1]<<" | ";
