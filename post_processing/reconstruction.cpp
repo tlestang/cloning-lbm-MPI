@@ -15,16 +15,16 @@ int main()
   string buf, masterFolderName = "outputFolder/", folderName, vtkName;
   
   cout << "Input output directory (/ AT THE END)" << endl;
-  cin >> dirName;
-  //dirName = "test/";
+  //cin >> dirName;
+  dirName = "/home/thibault/tailleur_lecomte/lbm/runs_from_psmn/L32_T_1500_dT_2_k_20_eps_0.01_128_clones_IO_ZERO_MEAN/";
   cout << "Input number of replica" << endl;
-  cin >> Nc; 
-  //Nc = 8;
+  //cin >> Nc; 
+  Nc = 128;
   cout << "Input total time of run and cloning time" << endl;
-  cin >> T; cin >> dT;
+  //cin >> T; cin >> dT;
   cout << "Input VTK file sampling period (in timesteps)" << endl;
-  cin >> facquVTK;
-  //T = 15; dT = 5;
+  //cin >> facquVTK;
+  T = 1500; dT = 2;
 
   int nt = floor(T/dT);
   int L; double U, T0, dt;
@@ -46,9 +46,9 @@ int main()
   
   /* LOOP ON CLONES */
 
-  for (int j=0;j<Nc;j++)
+  for (int j=0;j<1;j++)
     {
-      cout << "Reconstructing trajetory and drag signal for clone " << j+1 << "/" << Nc << endl;
+      //cout << "Reconstructing trajetory and drag signal for clone " << j+1 << "/" << Nc << endl;
       
       labelArray[j] = j;
 
@@ -71,6 +71,7 @@ int main()
       int vtkIdxStart = nbrVTK*nt -1;
       for(int t=nt-1;t>-1;t--)
 	{
+	  cout<<"Evolution : "<<t<<" | reading clone " << cloneIdx << " ";
 	  /* OPEN TRAJ. FILE FOR CLONE J*/
 	  ssbuf << "clone_" << cloneIdx << "/data_force.datout";
 	  buf = dirName + ssbuf.str();
@@ -79,6 +80,7 @@ int main()
 	  
 	  if(t>0)
 	    {
+	      cout << "Setting cursor to " << Nc*(t-1) << endl;
 	      labels.seekg(Nc*(t-1)*sizeof(int), ios::beg);
 	      forceFile.seekg(t*ndt*sizeof(double), ios::beg);
 	    }
